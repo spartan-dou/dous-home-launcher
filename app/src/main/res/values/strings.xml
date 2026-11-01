@@ -1,0 +1,26 @@
+<resources>
+    <string name="app_name">Dou\'s Home Launcher</string>
+    <string name="settings_name">Réglages de l\'accueil</string>
+    <string name="all_apps">Toutes les applis</string>
+    <string name="all_apps_hint">Appui long sur OK : ajouter à l\'accueil ou retirer</string>
+    <string name="server_error">Immich injoignable : %1$s</string>
+    <string name="not_connected">Connectez Immich depuis « Réglages de l\'accueil »</string>
+    <string name="no_album">Choisissez des albums dans « Réglages de l\'accueil »</string>
+    <string name="no_photos">Aucune photo dans les albums choisis</string>
+    <string name="scan_qr">Scannez avec le téléphone pour connecter Immich</string>
+    <string name="scan_qr_url">Scannez avec le téléphone, ou ouvrez\n%1$s</string>
+    <string name="no_network">Pas de réseau local : impossible d\'afficher le QR code</string>
+    <string name="connected_to">Connecté à %1$s</string>
+    <string name="photos">Photos</string>
+    <string name="memories">Souvenirs du jour (il y a X ans), mélangés aux albums</string>
+    <string name="display">Affichage</string>
+    <string name="move_left">Déplacer vers la gauche</string>
+    <string name="move_right">Déplacer vers la droite</string>
+    <string name="remove">Retirer de l\'accueil</string>
+    <string name="added">%1$s ajouté à l\'accueil</string>
+    <string name="removed">%1$s retiré de l\'accueil</string>
+    <string name="interval">Changer de photo toutes les %1$s</string>
+    <string name="show_date">Afficher la date de la photo</string>
+    <string name="show_place">Afficher le lieu de la photo</string>
+    <string name="auto_hide">Masquer les applis après 30 s sans toucher la télécommande</string>
+</resources>
