@@ -15,7 +15,9 @@
         <include layout="@layout/slide" />
     </FrameLayout>
 
+    <!-- Darken the band of the clock and the band of the apps; swapped when the apps are on top -->
     <View
+        android:id="@+id/top_scrim"
         android:layout_width="match_parent"
         android:layout_height="220dp"
         android:background="@drawable/scrim_top" />
@@ -28,10 +30,12 @@
         android:background="@drawable/scrim_bottom" />
 
     <LinearLayout
+        android:id="@+id/clock_box"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="56dp"
         android:layout_marginTop="32dp"
+        android:layout_marginEnd="56dp"
         android:orientation="vertical">
 
         <TextClock
@@ -119,26 +123,16 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent" />
 
-            <HorizontalScrollView
+            <!-- One horizontal scroller per row, built in code -->
+            <LinearLayout
+                android:id="@+id/rows"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:clipChildren="false"
                 android:clipToPadding="false"
-                android:fadingEdgeLength="0dp"
-                android:scrollbars="none">
-
-                <LinearLayout
-                    android:id="@+id/row"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:clipChildren="false"
-                    android:clipToPadding="false"
-                    android:orientation="horizontal"
-                    android:paddingStart="14dp"
-                    android:paddingTop="16dp"
-                    android:paddingEnd="14dp"
-                    android:paddingBottom="16dp" />
-            </HorizontalScrollView>
+                android:orientation="vertical"
+                android:paddingTop="10dp"
+                android:paddingBottom="10dp" />
         </FrameLayout>
     </LinearLayout>
 

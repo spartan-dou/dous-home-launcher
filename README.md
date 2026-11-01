@@ -19,11 +19,19 @@ Connexion depuis le téléphone : *Réglages de l'accueil* affiche un QR code. L
 | Où | Touche | Action |
 |---|---|---|
 | Rangée d'accueil | OK | Ouvre l'appli |
-| Rangée d'accueil | Appui long sur OK | Déplacer ou retirer |
-| Toutes les applis | Appui long sur OK | Ajouter à l'accueil ou retirer |
+| Rangée d'accueil | Appui long sur OK | Déplacer à gauche ou à droite, vers la rangée du dessus ou du dessous, retirer |
+| Toutes les applis | Appui long sur OK | Ajouter à l'accueil (fin de la première rangée) ou retirer |
 | Partout | Accueil | Revient à la première appli |
 
+Jusqu'à 3 rangées d'applis. Une rangée se crée quand on y déplace une appli et disparaît quand elle est vide.
+
 Après 30 s sans toucher la télécommande, les applis s'effacent et seule la photo reste. La première touche les fait revenir, sans rien lancer.
+
+**Mise en page**, dans *Réglages de l'accueil* :
+- applis en bas ou en haut de l'écran ;
+- taille des vignettes : petite, moyenne ou grande ;
+- horloge à gauche, à droite, au centre ou masquée (du côté opposé aux applis), la légende de la photo prenant le coin libre ;
+- couleur d'accent du cadre de focus : blanc, bleu glacier, lavande, rose, ambre ou menthe.
 
 ## Compilation
 

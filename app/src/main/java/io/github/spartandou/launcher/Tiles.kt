@@ -3,6 +3,8 @@ package io.github.spartandou.launcher
 import android.content.Context
 import android.graphics.Outline
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.StateListDrawable
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
@@ -12,20 +14,19 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
 
-/** App tiles in the 16:9 TV banner shape, with a white frame and a slight zoom on focus. */
+/** App tiles in the 16:9 TV banner shape, with an accent frame and a slight zoom on focus. */
 object Tiles {
-    const val WIDTH_DP = 168
-    const val HEIGHT_DP = 94
     const val MARGIN_DP = 10
 
-    fun create(context: Context, label: String, banner: Drawable?, icon: Drawable?, onFocus: (Boolean) -> Unit): FrameLayout {
+    fun height(width: Int) = width * 9 / 16
+
+    fun create(context: Context, label: String, banner: Drawable?, icon: Drawable?, accent: Int, onFocus: (Boolean) -> Unit): FrameLayout {
         val tile = FrameLayout(context)
-        tile.layoutParams = FrameLayout.LayoutParams(dp(context, WIDTH_DP), dp(context, HEIGHT_DP))
         tile.isFocusable = true
         tile.isClickable = true
         tile.isLongClickable = true
         tile.contentDescription = label
-        tile.foreground = context.getDrawable(R.drawable.tile_focus)
+        tile.foreground = focusFrame(context, accent)
         val radius = dp(context, 10).toFloat()
         tile.outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(view: View, outline: Outline) = outline.setRoundRect(0, 0, view.width, view.height, radius)
@@ -61,6 +62,14 @@ object Tiles {
             onFocus(focused)
         }
         return tile
+    }
+
+    // Accent-coloured frame, only drawn on the focused tile
+    private fun focusFrame(context: Context, accent: Int) = StateListDrawable().apply {
+        addState(intArrayOf(android.R.attr.state_focused), GradientDrawable().apply {
+            cornerRadius = dp(context, 10).toFloat()
+            setStroke(dp(context, 3), accent)
+        })
     }
 
     fun dp(context: Context, value: Int) = (value * context.resources.displayMetrics.density + 0.5f).toInt()

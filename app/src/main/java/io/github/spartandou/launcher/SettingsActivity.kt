@@ -75,6 +75,12 @@ class SettingsActivity : Activity() {
         right.addView(check(getString(R.string.show_date), prefs.showDate) { prefs.showDate = it })
         right.addView(check(getString(R.string.show_place), prefs.showPlace) { prefs.showPlace = it })
         right.addView(check(getString(R.string.auto_hide), prefs.autoHide) { prefs.autoHide = it })
+
+        right.addView(header(getString(R.string.layout)))
+        right.addView(cycle(R.string.dock_position, R.array.dock_positions, { if (prefs.dockOnTop) 1 else 0 }) { prefs.dockOnTop = it == 1 })
+        right.addView(cycle(R.string.tile_size, R.array.tile_sizes, { prefs.tileSize }) { prefs.tileSize = it })
+        right.addView(cycle(R.string.clock_position, R.array.clock_positions, { prefs.clockPosition }) { prefs.clockPosition = it })
+        right.addView(cycle(R.string.accent, R.array.accents, { prefs.accent }) { prefs.accent = it })
         root.addView(ScrollView(this).apply { addView(right) }, LinearLayout.LayoutParams(0, -1, 1f))
 
         setContentView(root)
@@ -132,6 +138,20 @@ class SettingsActivity : Activity() {
         val matrix = QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, size, size)
         val pixels = IntArray(size * size) { if (matrix[it % size, it / size]) Color.BLACK else Color.WHITE }
         return Bitmap.createBitmap(pixels, size, size, Bitmap.Config.RGB_565)
+    }
+
+    // A button that steps through the choices of a string array, showing the current one
+    private fun cycle(label: Int, choices: Int, get: () -> Int, set: (Int) -> Unit): Button {
+        val names = resources.getStringArray(choices)
+        val button = Button(this)
+        fun refresh() {
+            button.text = getString(label, names[get().coerceIn(names.indices)])
+            // The accent button shows its own colour
+            if (choices == R.array.accents) button.setTextColor(prefs.accentColor)
+        }
+        refresh()
+        button.setOnClickListener { set((get() + 1) % names.size); refresh() }
+        return button
     }
 
     private fun check(label: String, value: Boolean, onChange: (Boolean) -> Unit) = CheckBox(this).apply {

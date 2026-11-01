@@ -16,7 +16,37 @@
     <string name="display">Affichage</string>
     <string name="move_left">Déplacer vers la gauche</string>
     <string name="move_right">Déplacer vers la droite</string>
+    <string name="move_up">Rangée du dessus</string>
+    <string name="move_down">Rangée du dessous</string>
     <string name="remove">Retirer de l\'accueil</string>
+    <string name="layout">Mise en page</string>
+    <string name="dock_position">Applis : %1$s</string>
+    <string-array name="dock_positions">
+        <item>en bas</item>
+        <item>en haut</item>
+    </string-array>
+    <string name="tile_size">Taille des vignettes : %1$s</string>
+    <string-array name="tile_sizes">
+        <item>petite</item>
+        <item>moyenne</item>
+        <item>grande</item>
+    </string-array>
+    <string name="clock_position">Horloge : %1$s</string>
+    <string-array name="clock_positions">
+        <item>à gauche</item>
+        <item>à droite</item>
+        <item>au centre</item>
+        <item>masquée</item>
+    </string-array>
+    <string name="accent">Couleur d\'accent : %1$s</string>
+    <string-array name="accents">
+        <item>blanc</item>
+        <item>bleu glacier</item>
+        <item>lavande</item>
+        <item>rose</item>
+        <item>ambre</item>
+        <item>menthe</item>
+    </string-array>
     <string name="added">%1$s ajouté à l\'accueil</string>
     <string name="removed">%1$s retiré de l\'accueil</string>
     <string name="interval">Changer de photo toutes les %1$s</string>
