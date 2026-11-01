@@ -20,27 +20,41 @@ object Tiles {
 
     fun height(width: Int) = width * 9 / 16
 
-    fun create(context: Context, label: String, banner: Drawable?, icon: Drawable?, accent: Int, onFocus: (Boolean) -> Unit): FrameLayout {
+    /** An empty tile: its picture comes later from [fill], rendered off the main thread. */
+    fun create(context: Context, label: String, accent: Int, onFocus: (Boolean) -> Unit): FrameLayout {
         val tile = FrameLayout(context)
         tile.isFocusable = true
         tile.isClickable = true
         tile.isLongClickable = true
         tile.contentDescription = label
         tile.foreground = focusFrame(context, accent)
+        tile.background = context.getDrawable(R.drawable.tile_background)
         val radius = dp(context, 10).toFloat()
         tile.outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(view: View, outline: Outline) = outline.setRoundRect(0, 0, view.width, view.height, radius)
         }
         tile.clipToOutline = true
 
+        tile.setOnFocusChangeListener { view, focused ->
+            val scale = if (focused) 1.1f else 1f
+            view.animate().scaleX(scale).scaleY(scale).translationZ(if (focused) dp(context, 8).toFloat() else 0f)
+                .setDuration(120).start()
+            onFocus(focused)
+        }
+        return tile
+    }
+
+    /** The app banner over the whole tile, or for phone-style apps the icon and the name. */
+    fun fill(context: Context, tile: FrameLayout, label: String, banner: Drawable?, icon: Drawable?) {
+        tile.removeAllViews()
         if (banner != null) {
+            tile.background = null
             tile.addView(ImageView(context).apply {
                 scaleType = ImageView.ScaleType.FIT_XY
                 setImageDrawable(banner)
             }, FrameLayout.LayoutParams(-1, -1))
         } else {
             // Phone-style apps have no banner: icon and name on a dark glass tile
-            tile.background = context.getDrawable(R.drawable.tile_background)
             tile.addView(ImageView(context).apply { setImageDrawable(icon) },
                 FrameLayout.LayoutParams(dp(context, 44), dp(context, 44), Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(context, 14) })
             tile.addView(TextView(context).apply {
@@ -54,14 +68,6 @@ object Tiles {
                 bottomMargin = dp(context, 8); leftMargin = dp(context, 8); rightMargin = dp(context, 8)
             })
         }
-
-        tile.setOnFocusChangeListener { view, focused ->
-            val scale = if (focused) 1.1f else 1f
-            view.animate().scaleX(scale).scaleY(scale).translationZ(if (focused) dp(context, 8).toFloat() else 0f)
-                .setDuration(120).start()
-            onFocus(focused)
-        }
-        return tile
     }
 
     // Accent-coloured frame, only drawn on the focused tile

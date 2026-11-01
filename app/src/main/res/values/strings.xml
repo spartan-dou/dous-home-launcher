@@ -11,6 +11,7 @@
     <string name="scan_qr_url">Scannez avec le téléphone, ou ouvrez\n%1$s</string>
     <string name="no_network">Pas de réseau local : impossible d\'afficher le QR code</string>
     <string name="connected_to">Connecté à %1$s</string>
+    <string name="not_connected_yet">Immich n\'est pas encore connecté</string>
     <string name="photos">Photos</string>
     <string name="memories">Souvenirs du jour (il y a X ans), mélangés aux albums</string>
     <string name="display">Affichage</string>

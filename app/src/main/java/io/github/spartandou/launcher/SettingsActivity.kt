@@ -60,7 +60,7 @@ class SettingsActivity : Activity() {
         right.addView(albumsBox)
 
         right.addView(header(getString(R.string.display)))
-        val interval = Button(this)
+        val interval = button()
         fun refreshInterval() {
             val s = prefs.intervalSeconds
             interval.text = getString(R.string.interval, if (s < 60) "$s s" else "${s / 60} min")
@@ -71,7 +71,7 @@ class SettingsActivity : Activity() {
             prefs.intervalSeconds = all[(all.indexOf(prefs.intervalSeconds) + 1) % all.size]
             refreshInterval()
         }
-        right.addView(interval, LinearLayout.LayoutParams(-2, -2))
+        right.addView(interval)
         right.addView(check(getString(R.string.show_date), prefs.showDate) { prefs.showDate = it })
         right.addView(check(getString(R.string.show_place), prefs.showPlace) { prefs.showPlace = it })
         right.addView(check(getString(R.string.auto_hide), prefs.autoHide) { prefs.autoHide = it })
@@ -108,7 +108,7 @@ class SettingsActivity : Activity() {
     }
 
     private fun refreshStatus() {
-        status.text = if (prefs.apiKey.isBlank()) getString(R.string.not_connected)
+        status.text = if (prefs.apiKey.isBlank()) getString(R.string.not_connected_yet)
         else getString(R.string.connected_to, prefs.serverUrl)
     }
 
@@ -143,7 +143,7 @@ class SettingsActivity : Activity() {
     // A button that steps through the choices of a string array, showing the current one
     private fun cycle(label: Int, choices: Int, get: () -> Int, set: (Int) -> Unit): Button {
         val names = resources.getStringArray(choices)
-        val button = Button(this)
+        val button = button()
         fun refresh() {
             button.text = getString(label, names[get().coerceIn(names.indices)])
             // The accent button shows its own colour
@@ -152,6 +152,26 @@ class SettingsActivity : Activity() {
         refresh()
         button.setOnClickListener { set((get() + 1) % names.size); refresh() }
         return button
+    }
+
+    // Full-width rounded rows, lighter when focused, so every button looks the same
+    private fun button() = Button(this).apply {
+        isAllCaps = false
+        gravity = Gravity.CENTER_VERTICAL or Gravity.START
+        setTextColor(Color.WHITE)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+        stateListAnimator = null
+        val radius = dp(10).toFloat()
+        background = android.graphics.drawable.StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_focused), android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = radius; setColor(0x40FFFFFF)
+            })
+            addState(intArrayOf(), android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = radius; setColor(0x14FFFFFF)
+            })
+        }
+        setPadding(dp(16), dp(12), dp(16), dp(12))
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) }
     }
 
     private fun check(label: String, value: Boolean, onChange: (Boolean) -> Unit) = CheckBox(this).apply {

@@ -43,6 +43,9 @@ class HomeActivity : Activity() {
     private var uiHidden = false
     private var layoutKey = ""
 
+    // Pictures of the home row tiles, at the current tile size; the "all apps" ones are never kept
+    private val rowImages = HashMap<String, TileImage>()
+
     private val hideUi = Runnable { setUiHidden(true) }
 
     // The scrim that fades with the apps: the one on their side of the screen
@@ -96,6 +99,7 @@ class HomeActivity : Activity() {
         if (layoutKey != prefs.layoutKey) {
             layoutKey = prefs.layoutKey
             applyLayout()
+            rowImages.clear()
             if (apps.isNotEmpty()) { buildRows(); gridDirty = true }
         }
         if (appsDirty) loadApps()
@@ -221,6 +225,7 @@ class HomeActivity : Activity() {
             val loaded = Apps.load(this)
             main.post {
                 apps = loaded
+                rowImages.clear()
                 gridDirty = true
                 if (prefs.rows == null) {
                     // First start: a few apps to begin with, the user picks the rest from "all apps"
@@ -247,7 +252,7 @@ class HomeActivity : Activity() {
         rows.forEachIndexed { rowIndex, row ->
             val line = newRow()
             row.forEach { app ->
-                val tile = Tiles.create(this, app.label, app.banner, app.icon, prefs.accentColor) { if (it) focusedLabel.text = app.label }
+                val tile = appTile(app, rowImages)
                 tile.tag = app.packageName
                 tile.setOnClickListener { launch(app) }
                 tile.setOnLongClickListener { editFavourite(app); true }
@@ -255,16 +260,36 @@ class HomeActivity : Activity() {
                 if (app.packageName == focused) toFocus = tile
             }
             if (rowIndex == rows.size - 1) {
-                val allTile = Tiles.create(this, getString(R.string.all_apps), null, getDrawable(R.drawable.ic_apps), prefs.accentColor) {
+                val allTile = Tiles.create(this, getString(R.string.all_apps), prefs.accentColor) {
                     if (it) focusedLabel.text = getString(R.string.all_apps)
                 }
                 allTile.tag = ALL_APPS
                 allTile.setOnClickListener { openAllApps() }
+                Tiles.fill(this, allTile, getString(R.string.all_apps), null, getDrawable(R.drawable.ic_apps))
                 line.addView(allTile, tileParams())
                 if (focused == ALL_APPS) toFocus = allTile
             }
         }
         (toFocus ?: firstTile())?.requestFocus()
+    }
+
+    /** A tile whose picture is rendered on the worker thread, or taken from [cache] when it has it. */
+    private fun appTile(app: App, cache: MutableMap<String, TileImage>?): android.widget.FrameLayout {
+        val tile = Tiles.create(this, app.label, prefs.accentColor) { if (it) focusedLabel.text = app.label }
+        val cached = cache?.get(app.packageName)
+        if (cached != null) {
+            Tiles.fill(this, tile, app.label, cached.banner, cached.icon)
+        } else {
+            val width = tileWidth
+            worker.execute {
+                val image = Apps.tileImage(this, app, width)
+                main.post {
+                    cache?.put(app.packageName, image)
+                    Tiles.fill(this, tile, app.label, image.banner, image.icon)
+                }
+            }
+        }
+        return tile
     }
 
     private fun newRow(): LinearLayout {
@@ -281,7 +306,8 @@ class HomeActivity : Activity() {
             clipChildren = false
             clipToPadding = false
             setFadingEdgeLength(0)
-            addView(line)
+            // Wrap height: the default params of a scroller child would fill the whole screen
+            addView(line, FrameLayout.LayoutParams(-2, -2))
         }
         rowsBox.addView(scroller, LinearLayout.LayoutParams(-1, -2))
         return line
@@ -296,7 +322,7 @@ class HomeActivity : Activity() {
         grid.columnCount = ((resources.displayMetrics.widthPixels - Tiles.dp(this, 96)) / (width + Tiles.dp(this, 2 * Tiles.MARGIN_DP))).coerceAtLeast(1)
         apps.forEach { app ->
             val star = if (app.packageName in favourites) "★ " else ""
-            val tile = Tiles.create(this, app.label, app.banner, app.icon, prefs.accentColor) { if (it) focusedLabel.text = app.label }
+            val tile = appTile(app, null)
             tile.contentDescription = star + app.label
             tile.setOnClickListener { closeAllApps(); launch(app) }
             tile.setOnLongClickListener { toggleFavourite(app); true }
@@ -320,6 +346,9 @@ class HomeActivity : Activity() {
     private fun closeAllApps() {
         if (allApps.visibility != View.VISIBLE) return
         allApps.visibility = View.GONE
+        // Frees the pictures of every app
+        grid.removeAllViews()
+        gridDirty = true
         dock.visibility = View.VISIBLE
         rowsBox.findViewWithTag<View>(ALL_APPS)?.requestFocus()
         scheduleHide()

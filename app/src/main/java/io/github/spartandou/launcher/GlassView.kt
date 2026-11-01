@@ -56,6 +56,13 @@ class GlassView @JvmOverloads constructor(context: Context, attrs: AttributeSet?
         }
     }
 
+    // A background: no size of its own, so a wrap_content parent sizes itself on its content and
+    // then stretches the glass to match (otherwise "at most" would mean the whole screen)
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        fun size(spec: Int) = if (MeasureSpec.getMode(spec) == MeasureSpec.EXACTLY) MeasureSpec.getSize(spec) else 0
+        setMeasuredDimension(size(widthMeasureSpec), size(heightMeasureSpec))
+    }
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         bounds.set(0f, 0f, w.toFloat(), h.toFloat())
         clip.reset()
