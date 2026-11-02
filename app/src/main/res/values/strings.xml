@@ -51,7 +51,8 @@
 
     <!-- Display -->
     <string name="auto_hide">Masquer les applis après 30 s sans toucher la télécommande</string>
-    <string name="show_status">Afficher la connexion et la RAM en haut</string>
+    <string name="show_status">Alertes en haut : réseau coupé ou faible, mémoire presque pleine</string>
+    <string name="drift">Fond animé : zoom très lent sur la photo</string>
     <string name="clock_label">Horloge</string>
     <string-array name="clock_positions">
         <item>à gauche</item>
@@ -137,7 +138,6 @@
     <string name="show_news">Afficher les nouveautés à droite (une affiche à la fois)</string>
     <string name="news_channels">Rangées des applis</string>
     <string name="news_channels_hint">Les rangées que vos applis proposent à l\'accueil Android TV. Haut depuis les icônes de l\'accueil pour aller sur l\'affiche : gauche/droite pour changer, OK pour l\'ouvrir.</string>
-    <string name="news_kicker">Nouveau · %1$s</string>
 
     <!-- Remote -->
     <string name="section_remote">Télécommande</string>

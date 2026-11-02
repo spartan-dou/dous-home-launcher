@@ -33,6 +33,12 @@ import com.google.zxing.qrcode.QRCodeWriter
  */
 class SettingsActivity : Activity() {
     private lateinit var prefs: Prefs
+
+    // Focused lines take the home screen's accent colour (the photo's in automatic mode), see-through
+    private val focusColor by lazy {
+        val accent = if (prefs.accent == Prefs.ACCENT_AUTO) Accent.color else prefs.accentColor
+        (accent and 0x00FFFFFF) or 0x59000000
+    }
     private lateinit var content: LinearLayout
     private lateinit var contentScroll: ScrollView
     private val main = Handler(Looper.getMainLooper())
@@ -226,6 +232,7 @@ class SettingsActivity : Activity() {
     private fun display() {
         add(check(getString(R.string.auto_hide), prefs.autoHide) { prefs.autoHide = it })
         add(check(getString(R.string.show_status), prefs.showStatus) { prefs.showStatus = it })
+        add(check(getString(R.string.drift), prefs.drift) { prefs.drift = it })
         add(pick(getString(R.string.clock_label), array(R.array.clock_positions), { prefs.clockPosition }) { prefs.clockPosition = it })
         add(pick(getString(R.string.clock_size_label), array(R.array.clock_sizes), { prefs.clockSize }) { prefs.clockSize = it })
         add(pick(getString(R.string.accent_label), array(R.array.accents), { prefs.accent }) { prefs.accent = it })
@@ -496,7 +503,7 @@ class SettingsActivity : Activity() {
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
         isFocusable = true
         isClickable = true
-        background = rounded(0x33FFFFFF, Color.TRANSPARENT)
+        background = rounded(focusColor, Color.TRANSPARENT)
         setPadding(dp(14), dp(12), dp(14), dp(12))
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) }
     }
@@ -508,7 +515,7 @@ class SettingsActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
             isFocusable = true
             isClickable = true
-            background = rounded(0x33FFFFFF, 0x0FFFFFFF)
+            background = rounded(focusColor, 0x0FFFFFFF)
             setPadding(dp(18), dp(14), dp(18), dp(14))
             layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) }
         }
@@ -540,7 +547,8 @@ class SettingsActivity : Activity() {
         isChecked = value
         setTextColor(Color.WHITE)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
-        background = rounded(0x33FFFFFF, Color.TRANSPARENT)
+        background = rounded(focusColor, Color.TRANSPARENT)
+        buttonTintList = android.content.res.ColorStateList.valueOf((focusColor or 0xFF000000.toInt()))
         setPadding(dp(10), dp(10), dp(10), dp(10))
         setOnCheckedChangeListener { _, checked -> onChange(checked) }
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) }

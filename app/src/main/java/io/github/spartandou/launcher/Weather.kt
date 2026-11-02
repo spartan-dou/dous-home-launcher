@@ -21,8 +21,11 @@ class Weather(context: Context) {
 
     data class Place(val name: String, val lat: Double, val lon: Double)
 
+    /** What to show: a line icon (drawable) and the text. */
+    data class Line(val icon: Int, val text: String)
+
     /** The line to show, from the cache (no network). Null when there is nothing yet. */
-    fun line(): String? {
+    fun line(): Line? {
         val json = cache.getString("forecast", null) ?: return null
         val daily = JSONObject(json).optJSONObject("daily") ?: return null
         val dates = daily.optJSONArray("time") ?: return null
@@ -36,7 +39,7 @@ class Weather(context: Context) {
         val max = daily.optJSONArray("temperature_2m_max")?.optDouble(i) ?: return null
         val (icon, label) = describe(code)
         val temps = "${Math.round(min)}° / ${Math.round(max)}°"
-        return (if (tomorrow) "Demain  " else "") + "$icon  $temps  ·  $label"
+        return Line(icon, (if (tomorrow) "Demain  " else "") + "$temps  ·  $label")
     }
 
     /**
@@ -106,21 +109,21 @@ class Weather(context: Context) {
             }
         }
 
-        // WMO weather codes, as used by Open-Meteo
-        private fun describe(code: Int): Pair<String, String> = when (code) {
-            0 -> "☀️" to "Ensoleillé"
-            1 -> "🌤️" to "Plutôt ensoleillé"
-            2 -> "⛅" to "Éclaircies"
-            3 -> "☁️" to "Couvert"
-            45, 48 -> "🌫️" to "Brouillard"
-            51, 53, 55, 56, 57 -> "🌦️" to "Bruine"
-            61, 63, 66 -> "🌧️" to "Pluie"
-            65, 67 -> "🌧️" to "Forte pluie"
-            71, 73, 75, 77 -> "🌨️" to "Neige"
-            80, 81, 82 -> "🌦️" to "Averses"
-            85, 86 -> "🌨️" to "Averses de neige"
-            95, 96, 99 -> "⛈️" to "Orages"
-            else -> "🌡️" to "Météo"
+        // WMO weather codes, as used by Open-Meteo; white line icons like the other ones on screen
+        private fun describe(code: Int): Pair<Int, String> = when (code) {
+            0 -> R.drawable.ic_w_sun to "Ensoleillé"
+            1 -> R.drawable.ic_w_partly to "Plutôt ensoleillé"
+            2 -> R.drawable.ic_w_partly to "Éclaircies"
+            3 -> R.drawable.ic_w_cloud to "Couvert"
+            45, 48 -> R.drawable.ic_w_fog to "Brouillard"
+            51, 53, 55, 56, 57 -> R.drawable.ic_w_rain to "Bruine"
+            61, 63, 66 -> R.drawable.ic_w_rain to "Pluie"
+            65, 67 -> R.drawable.ic_w_rain to "Forte pluie"
+            71, 73, 75, 77 -> R.drawable.ic_w_snow to "Neige"
+            80, 81, 82 -> R.drawable.ic_w_rain to "Averses"
+            85, 86 -> R.drawable.ic_w_snow to "Averses de neige"
+            95, 96, 99 -> R.drawable.ic_w_storm to "Orages"
+            else -> R.drawable.ic_w_cloud to "Météo"
         }
     }
 }

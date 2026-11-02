@@ -291,7 +291,8 @@ class HomeActivity : Activity() {
             Prefs.CLOCK_CENTER -> Gravity.CENTER_HORIZONTAL
             else -> Gravity.START
         }
-        clockBox.gravity = horizontal
+        // The date, weather and place column lines up on the clock's outer side
+        findViewById<LinearLayout>(R.id.clock_details).gravity = if (clock == Prefs.CLOCK_RIGHT) Gravity.END else Gravity.START
         (clockBox.getChildAt(0) as TextView).setTextSize(TypedValue.COMPLEX_UNIT_SP, Prefs.CLOCK_SIZES[prefs.clockSize].toFloat())
         (clockBox.layoutParams as FrameLayout.LayoutParams).apply {
             gravity = vertical or horizontal
@@ -314,7 +315,7 @@ class HomeActivity : Activity() {
     }
 
     private fun updateWeather() {
-        weather.line()?.let { weatherView.text = it; weatherView.visibility = View.VISIBLE }
+        showWeatherLine()
         val city = prefs.weatherCity
         if (weatherLoading || !weather.stale(city)) return
         weatherLoading = true
@@ -322,9 +323,22 @@ class HomeActivity : Activity() {
             val ok = try { weather.refresh(city); true } catch (e: Exception) { Log.w(TAG, "Weather not loaded", e); false }
             main.post {
                 weatherLoading = false
-                if (ok && prefs.showWeather) weather.line()?.let { weatherView.text = it; weatherView.visibility = View.VISIBLE }
+                if (ok && prefs.showWeather) showWeatherLine()
             }
         }
+    }
+
+    private var weatherIcon = 0
+
+    private fun showWeatherLine() {
+        val line = weather.line() ?: return
+        weatherView.text = line.text
+        if (line.icon != weatherIcon) {
+            weatherIcon = line.icon
+            val size = Tiles.dp(this, 18)
+            weatherView.setCompoundDrawablesRelative(getDrawable(line.icon)?.apply { setBounds(0, 0, size, size) }, null, null, null)
+        }
+        weatherView.visibility = View.VISIBLE
     }
 
     private fun scheduleHide() {
@@ -415,9 +429,9 @@ class HomeActivity : Activity() {
             val position = if (index != null && others.size > window) "${index + 1} / ${others.size}" else null
             // The round buttons only above the very first row (or the pinned one on top)
             val first = b == 0 && (index == null || index == 0)
-            val (line, name) = newBand(row.title, first = first, position = position)
-            bandPinned += index == null
             val width = Tiles.dp(this, Prefs.TILE_WIDTHS[row.size])
+            val (line, name) = newBand(row.title, first = first, position = position, tileWidth = width)
+            bandPinned += index == null
             items.forEach { item ->
                 val tile = when (item) {
                     is App -> appTile(item, width, rowImages, name).apply {
@@ -451,10 +465,10 @@ class HomeActivity : Activity() {
      * A "continue watching" entry: its still, a progress bar when known. Focused for a moment, it
      * puts its picture behind the home screen instead of the photo.
      */
-    private fun programTile(program: Program, width: Int, name: TextView): FrameLayout {
+    private fun programTile(program: Program, width: Int, name: TileName): FrameLayout {
         val label = listOfNotNull(program.title, program.subtitle).joinToString("  ·  ")
         val tile = Tiles.create(this, program.title) { focused ->
-            name.text = if (focused) label else ""
+            name.show(currentFocus, if (focused) label else null)
             if (focused) focusMedia(program) else main.post { if (currentFocus?.tag !is Long) leaveMedia() }
         }
         tile.tag = program.id
@@ -554,26 +568,13 @@ class HomeActivity : Activity() {
         }
         newsBox.layoutParams = params
         news.fit(available)
-        placeCaption()
-    }
-
-    // The photo's place and date sit left of the poster while it is shown, under the status icons otherwise
-    private fun placeCaption() {
-        val captionBox = findViewById<View>(R.id.caption_box)
-        val params = captionBox.layoutParams as LinearLayout.LayoutParams
-        val newsParams = newsBox.layoutParams as FrameLayout.LayoutParams
-        val infoParams = infoBox.layoutParams as FrameLayout.LayoutParams
-        params.marginEnd = if (news.isShown && !prefs.dockOnTop) {
-            newsParams.marginEnd + newsBox.paddingStart + newsBox.paddingEnd + news.cardWidth + Tiles.dp(this, 20) - infoParams.marginEnd
-        } else 0
-        captionBox.layoutParams = params
     }
 
     /** Reads the "continue watching" entries and the "new" panel's again (they change over time). */
     private fun loadPrograms() {
         val continueRow = prefs.appRows.orEmpty().any { it.continueWatching }
         val showNews = prefs.showNews
-        if (!showNews) { news.hide(); placeCaption() }
+        if (!showNews) news.hide()
         if (!continueRow && !showNews) return
         if (checkSelfPermission(READ_TV_LISTINGS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(READ_TV_LISTINGS), 1)
@@ -584,7 +585,7 @@ class HomeActivity : Activity() {
             val loaded = if (continueRow) WatchNext.load(this, emptyList()) else emptyList()
             val newItems = if (showNews) WatchNext.news(this, channels) else emptyList()
             main.post {
-                if (showNews) { news.setItems(newItems); placeCaption() }
+                if (showNews) news.setItems(newItems)
                 if (loaded == programs) return@post
                 programs = loaded
                 // Keeps only the pictures still in use
@@ -600,8 +601,9 @@ class HomeActivity : Activity() {
     }
 
     /** A tile whose picture is rendered on the worker thread, or taken from [cache] when it has it. */
-    private fun appTile(app: App, width: Int, cache: MutableMap<String, TileImage>?, name: TextView?): FrameLayout {
-        val tile = Tiles.create(this, app.label) { name?.text = if (it) app.label else "" }
+    private fun appTile(app: App, width: Int, cache: MutableMap<String, TileImage>?, name: TileName?): FrameLayout {
+        // Focused, the tile is the current focus: its name goes under it
+        val tile = Tiles.create(this, app.label) { name?.show(currentFocus, if (it) app.label else null) }
         val key = "${app.packageName}@$width"
         val cached = cache?.get(key)
         if (cached != null) {
@@ -618,11 +620,34 @@ class HomeActivity : Activity() {
         return tile
     }
 
+    /** The focused tile's name, centred under it; follows it when the row scrolls. */
+    private class TileName(val view: TextView, private val scroller: HorizontalScrollView) {
+        private var tile: View? = null
+
+        // A new row is not laid out yet when its tile takes the focus: placed again once it is
+        init {
+            view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> place() }
+        }
+
+        fun show(on: View?, label: String?) {
+            tile = if (label == null) null else on
+            view.text = label ?: ""
+            place()
+        }
+
+        fun place() {
+            val t = tile ?: return
+            val x = t.left + t.width / 2f - scroller.scrollX - view.width / 2f
+            view.translationX = x.coerceIn(0f, (scroller.width - view.width).coerceAtLeast(0).toFloat())
+        }
+    }
+
     /**
-     * A row's band: title line (title, focused app name, and on the first band the two round
-     * buttons; the row position when some rows are hidden), then its own glass and scroller.
+     * A row's band: title line (title in small capitals, the focused round button's name, on the
+     * first band the two round buttons, the row position when some rows are hidden), then the
+     * tiles floating on the photo, then the focused tile's name under it.
      */
-    private fun newBand(title: String, first: Boolean, position: String?): Pair<LinearLayout, TextView> {
+    private fun newBand(title: String, first: Boolean, position: String?, tileWidth: Int): Pair<LinearLayout, TileName> {
         val band = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; clipChildren = false; clipToPadding = false }
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -630,36 +655,35 @@ class HomeActivity : Activity() {
             // The focused round buttons grow past the padding: neither clip them
             clipChildren = false
             clipToPadding = false
-            setPadding(Tiles.dp(context, 22), 0, Tiles.dp(context, 8), Tiles.dp(context, 6))
+            setPadding(Tiles.dp(context, 24), 0, Tiles.dp(context, 8), Tiles.dp(context, 2))
         }
-        if (title.isNotEmpty()) header.addView(shadowed(title, 17f, Color.WHITE).apply {
+        if (title.isNotEmpty()) header.addView(shadowed(title.uppercase(), 14f, 0xE6FFFFFF.toInt()).apply {
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            letterSpacing = 0.16f
             setPadding(0, 0, Tiles.dp(context, 14), 0)
         })
-        val name = shadowed("", 15f, 0xB3FFFFFF.toInt())
-        header.addView(name, LinearLayout.LayoutParams(0, -2, 1f))
+        val hint = shadowed("", 14f, 0xB3FFFFFF.toInt())
+        header.addView(hint, LinearLayout.LayoutParams(0, -2, 1f))
         position?.let { header.addView(shadowed(it, 14f, 0x99FFFFFF.toInt()).apply { setPadding(0, 0, Tiles.dp(context, 12), 0) }) }
         if (first) {
-            header.addView(roundButton(R.drawable.ic_apps, getString(R.string.all_apps), ALL_APPS, name) { openAllApps() }
+            header.addView(roundButton(R.drawable.ic_apps, getString(R.string.all_apps), ALL_APPS, hint) { openAllApps() }
                 .apply { setOnLongClickListener { openSettings(); true } })
-            header.addView(roundButton(R.drawable.ic_settings, getString(R.string.settings_name), SETTINGS, name) { openSettings() })
+            header.addView(roundButton(R.drawable.ic_settings, getString(R.string.settings_name), SETTINGS, hint) { openSettings() })
         }
         band.addView(header, LinearLayout.LayoutParams(-1, -2))
 
-        // Clips the scroller (and its tiles) to the band: the frame is where tiles fade out
-        val glassBox = FrameLayout(this).apply { clipChildren = true; clipToPadding = false }
-        glassBox.addView(GlassView(this), FrameLayout.LayoutParams(-1, -1))
+        // No band behind the tiles: they float on their shadows over the darkened bottom of the photo
         val line = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             clipChildren = false
             clipToPadding = false
+            // Room for the focus zoom and the shadows
             val pad = Tiles.dp(context, 14)
             setPadding(pad, pad, pad, pad)
         }
         val scroller = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
-            // Clipped to the band: tiles past the edge fade out there instead of spilling over (the
-            // line's padding leaves room for the focus zoom)
+            // Clipped to the screen width minus the margins; the line's padding leaves room for the zoom
             clipChildren = true
             clipToPadding = false
             // Tiles past the edge fade out instead of being cut, and the scroll keeps the focused
@@ -669,12 +693,19 @@ class HomeActivity : Activity() {
             // Wrap height: the default params of a scroller child would fill the whole screen
             addView(line, FrameLayout.LayoutParams(-2, -2))
         }
-        // match_parent width: with two stretched children FrameLayout sizes the glass to the scroller
-        glassBox.addView(scroller, FrameLayout.LayoutParams(-1, -2))
-        band.addView(glassBox, LinearLayout.LayoutParams(-1, -2))
+        band.addView(scroller, LinearLayout.LayoutParams(-1, -2))
+
+        val nameView = shadowed("", 15f, Color.WHITE).apply {
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            gravity = Gravity.CENTER_HORIZONTAL
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+        band.addView(nameView, LinearLayout.LayoutParams(tileWidth * 2, -2).apply { topMargin = -Tiles.dp(this@HomeActivity, 4) })
+        val name = TileName(nameView, scroller)
+        scroller.setOnScrollChangeListener { _, _, _, _, _ -> name.place() }
 
         rowsBox.addView(band, LinearLayout.LayoutParams(-1, -2).apply {
-            if (rowsBox.childCount > 0) topMargin = Tiles.dp(this@HomeActivity, 14)
+            if (rowsBox.childCount > 0) topMargin = Tiles.dp(this@HomeActivity, 8)
         })
         rowLines += line
         return line to name

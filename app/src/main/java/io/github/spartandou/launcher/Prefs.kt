@@ -131,6 +131,11 @@ class Prefs(context: Context) {
         get() = prefs.getBoolean("show_status", true)
         set(value) = prefs.edit().putBoolean("show_status", value).apply()
 
+    /** A very slow zoom on each photo (GPU only: the photo is not decoded again). */
+    var drift: Boolean
+        get() = prefs.getBoolean("drift", true)
+        set(value) = prefs.edit().putBoolean("drift", value).apply()
+
     /** Changes whenever the photo source changes, so the home screen reloads the photo list. */
     val sourceKey: String
         get() = "$serverUrl|$apiKey|${albumIds.sorted().joinToString(",")}|$memories"
@@ -150,7 +155,8 @@ class Prefs(context: Context) {
         val TILE_WIDTHS = intArrayOf(112, 136, 168, 208)
 
         // Time text size in sp: small, medium, large
-        val CLOCK_SIZES = intArrayOf(56, 76, 96)
+        // Compact clock: the date and weather sit beside the time
+        val CLOCK_SIZES = intArrayOf(48, 60, 76)
 
         const val CLOCK_LEFT = 0
         const val CLOCK_RIGHT = 1

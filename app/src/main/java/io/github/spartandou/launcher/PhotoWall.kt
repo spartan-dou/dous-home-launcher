@@ -1,5 +1,9 @@
 package io.github.spartandou.launcher
 
+import android.animation.Animator
+import android.animation.ObjectAnimator
+import android.animation.PropertyValuesHolder
+import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -7,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.View
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
@@ -56,6 +61,8 @@ class PhotoWall(
     private var busy = false
     // A "continue watching" picture is shown instead of the photos
     private var media = false
+    // The slow zoom of each slide, while it is shown
+    private val drifts = HashMap<FrameLayout, Animator>()
 
     private val next = Runnable { showNext() }
 
@@ -78,6 +85,7 @@ class PhotoWall(
         val slide = slides[front]
         slide.animate().cancel()
         slide.alpha = 1f
+        slides.forEach { stopDrift(it) }
         clear(slides[1 - front])
         photoView(front).setImageDrawable(null)
         (slide.getChildAt(0) as ImageView).setImageBitmap(shownBlur)
@@ -90,6 +98,7 @@ class PhotoWall(
         GlassView.showAll(null, 0)
         slides.forEach { slide ->
             slide.animate().cancel()
+            stopDrift(slide)
             clear(slide)
         }
         shownPhoto?.recycle()
@@ -258,13 +267,14 @@ class PhotoWall(
         slide.animate().cancel()
         slide.alpha = 0f
         slide.bringToFront()
+        drift(slide)
         slide.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         slide.animate().alpha(1f).setDuration(FADE_MS).withEndAction {
             slide.setLayerType(View.LAYER_TYPE_NONE, null)
             // The previous photo is freed as soon as it is fully covered. Explicitly: the Java heap
             // stays tiny, so a GC (which would free it) can take many photos to come
             val old = slides[front]
-            if (old !== slide) clear(old)
+            if (old !== slide) { clear(old); stopDrift(old) }
             front = back
             if (oldPhoto !== bitmap) oldPhoto?.recycle()
             if (oldBlur !== blur) oldBlur?.recycle()
@@ -272,15 +282,16 @@ class PhotoWall(
         updateCaption(photo)
     }
 
-    // Place on the first line, date below it; a single line when only one of them is shown
+    // One line under the weather: pin, place, then the softer date
     private fun updateCaption(photo: Photo?) {
         val place = photo?.place?.takeIf { prefs.showPlace }
         val date = photo?.date?.takeIf { prefs.showDate }
         captionBox.animate().cancel()
         captionBox.alpha = 0f
         caption.text = place ?: date ?: ""
-        captionDate.text = if (place != null) date ?: "" else ""
+        captionDate.text = if (place != null && date != null) "  ·  $date" else ""
         captionDate.visibility = if (captionDate.text.isEmpty()) View.GONE else View.VISIBLE
+        pin.visibility = if (place != null) View.VISIBLE else View.GONE
         if (place != null || date != null) captionBox.animate().alpha(1f).setStartDelay(FADE_MS / 2).setDuration(FADE_MS).start()
     }
 
@@ -288,7 +299,38 @@ class PhotoWall(
         captionBox.animate().cancel()
         caption.text = text
         captionDate.visibility = View.GONE
+        pin.visibility = View.GONE
         captionBox.alpha = 1f
+    }
+
+    private val pin: View get() = (captionBox as android.view.ViewGroup).getChildAt(0)
+
+    /**
+     * The new photo zooms in by a few percent, then back, very slowly, around a random point. Only
+     * the slide's scale changes: the GPU redraws the same picture, nothing is decoded again.
+     */
+    private fun drift(slide: FrameLayout) {
+        drifts.remove(slide)?.cancel()
+        slide.scaleX = 1f
+        slide.scaleY = 1f
+        if (!prefs.drift) return
+        slide.pivotX = slide.width * Random.nextFloat()
+        slide.pivotY = slide.height * Random.nextFloat()
+        drifts[slide] = ObjectAnimator.ofPropertyValuesHolder(slide,
+            PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, DRIFT_SCALE),
+            PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, DRIFT_SCALE)).apply {
+            duration = DRIFT_MS
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            interpolator = AccelerateDecelerateInterpolator()
+            start()
+        }
+    }
+
+    private fun stopDrift(slide: FrameLayout) {
+        drifts.remove(slide)?.cancel()
+        slide.scaleX = 1f
+        slide.scaleY = 1f
     }
 
     private fun photoView(i: Int) = slides[i].getChildAt(1) as ImageView
@@ -318,5 +360,8 @@ class PhotoWall(
         private const val MAX_PHOTOS = 5_000
         private const val MAX_W = 1920
         private const val MAX_H = 1080
+        // 3 % over 30 s, then back: barely noticed, the photo just breathes
+        private const val DRIFT_SCALE = 1.03f
+        private const val DRIFT_MS = 30_000L
     }
 }

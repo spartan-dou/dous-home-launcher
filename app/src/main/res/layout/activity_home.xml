@@ -22,13 +22,15 @@
         android:layout_height="260dp"
         android:background="@drawable/scrim_top" />
 
+    <!-- Tall and dark: the apps float on it without a band of their own -->
     <View
         android:id="@+id/bottom_scrim"
         android:layout_width="match_parent"
-        android:layout_height="200dp"
+        android:layout_height="280dp"
         android:layout_gravity="bottom"
         android:background="@drawable/scrim_bottom" />
 
+    <!-- Compact clock: the time, and beside it the date, the weather and the photo's place -->
     <LinearLayout
         android:id="@+id/clock_box"
         android:layout_width="wrap_content"
@@ -36,7 +38,8 @@
         android:layout_marginStart="56dp"
         android:layout_marginTop="32dp"
         android:layout_marginEnd="56dp"
-        android:orientation="vertical">
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
         <TextClock
             style="@style/ShadowText"
@@ -47,34 +50,82 @@
             android:format24Hour="HH:mm"
             android:includeFontPadding="false"
             android:letterSpacing="-0.02"
-            android:textSize="76sp" />
+            android:textSize="60sp" />
 
-        <TextClock
-            style="@style/ShadowText"
+        <LinearLayout
+            android:id="@+id/clock_details"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:alpha="0.85"
-            android:fontFamily="sans-serif-medium"
-            android:format12Hour="EEEE d MMMM"
-            android:format24Hour="EEEE d MMMM"
-            android:letterSpacing="0.04"
-            android:textSize="16sp" />
+            android:layout_marginStart="18dp"
+            android:orientation="vertical">
 
-        <!-- Today's weather, or tomorrow's in the evening -->
-        <TextView
-            android:id="@+id/weather"
-            style="@style/ShadowText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:layout_marginTop="6dp"
-            android:alpha="0.9"
-            android:textSize="16sp"
-            android:visibility="gone" />
+            <TextClock
+                style="@style/ShadowText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:alpha="0.9"
+                android:fontFamily="sans-serif-medium"
+                android:format12Hour="EEEE d MMMM"
+                android:format24Hour="EEEE d MMMM"
+                android:letterSpacing="0.16"
+                android:textAllCaps="true"
+                android:textSize="13sp" />
+
+            <!-- Today's weather, or tomorrow's in the evening, with a line icon -->
+            <TextView
+                android:id="@+id/weather"
+                style="@style/ShadowText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:drawablePadding="7dp"
+                android:fontFamily="sans-serif-light"
+                android:gravity="center_vertical"
+                android:textSize="15sp"
+                android:visibility="gone" />
+
+            <!-- Photo place and date, filled by the photo wall -->
+            <LinearLayout
+                android:id="@+id/caption_box"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:alpha="0"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:layout_marginEnd="7dp"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_place" />
+
+                <TextView
+                    android:id="@+id/caption"
+                    style="@style/ShadowText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:fontFamily="sans-serif-light"
+                    android:maxWidth="380dp"
+                    android:maxLines="1"
+                    android:textSize="15sp" />
+
+                <TextView
+                    android:id="@+id/caption_date"
+                    style="@style/ShadowText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:alpha="0.7"
+                    android:fontFamily="sans-serif-light"
+                    android:maxLines="1"
+                    android:textSize="15sp" />
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
 
-    <!-- The corner the clock leaves free: status pill, then the photo place and date -->
+    <!-- The corner the clock leaves free: the Shield settings, alerts only when something is wrong -->
     <LinearLayout
         android:id="@+id/info_box"
         android:layout_width="wrap_content"
@@ -93,37 +144,6 @@
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="horizontal" />
-
-        <!-- Photo place and date: place in medium weight, date smaller and softer -->
-        <LinearLayout
-            android:id="@+id/caption_box"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:alpha="0"
-            android:gravity="end"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/caption"
-                style="@style/ShadowText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:fontFamily="sans-serif-medium"
-                android:maxWidth="380dp"
-                android:maxLines="1"
-                android:textSize="16sp" />
-
-            <TextView
-                android:id="@+id/caption_date"
-                style="@style/ShadowText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:alpha="0.8"
-                android:letterSpacing="0.03"
-                android:textSize="13sp" />
-        </LinearLayout>
     </LinearLayout>
 
     <!-- "New" panel: one poster at a time from the apps' channels, filled in code -->
@@ -150,7 +170,7 @@
         android:layout_marginBottom="28dp"
         android:orientation="vertical">
 
-        <!-- One band per row (title, glass, scroller), built in code -->
+        <!-- One band per row (title, floating tiles, focused app name), built in code -->
         <LinearLayout
             android:id="@+id/rows"
             android:layout_width="match_parent"

@@ -42,7 +42,6 @@ class NewsPanel(
 
     private val card = FrameLayout(context)
     private val posters = listOf(ImageView(context), ImageView(context))
-    private val kicker = text(12f, 0xCCFFFFFF.toInt())
     private val title = text(15f, 0xFFFFFFFF.toInt()).apply {
         typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
         maxLines = 2
@@ -64,22 +63,24 @@ class NewsPanel(
     init {
         card.isFocusable = true
         card.isClickable = true
-        card.foreground = FocusFrame(Tiles.dp(context, 12).toFloat(), Tiles.dp(context, 3).toFloat())
+        card.foreground = FocusFrame(Tiles.dp(context, 12).toFloat(), Tiles.dp(context, Tiles.FRAME_DP).toFloat())
         card.background = GradientDrawable().apply { setColor(0x59000000) }
+        // Floats like the app tiles
+        card.elevation = Tiles.dp(context, Tiles.ELEVATION_DP).toFloat()
         val radius = Tiles.dp(context, 12).toFloat()
         card.outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(view: View, outline: Outline) = outline.setRoundRect(0, 0, view.width, view.height, radius)
         }
         card.clipToOutline = true
         posters.forEach { card.addView(it.apply { scaleType = ImageView.ScaleType.CENTER_CROP }, FrameLayout.LayoutParams(-1, -1)) }
-        // Title over a dark gradient at the bottom of the poster
+        // The poster speaks for itself: its title (over a dark gradient) only while it is focused
         caption = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, intArrayOf(0xE6000000.toInt(), 0x00000000))
             val p = Tiles.dp(context, 10)
             setPadding(p, Tiles.dp(context, 28), p, p)
-            addView(kicker)
             addView(title)
+            visibility = View.GONE
         }
         card.addView(caption, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
         card.setOnClickListener { items.getOrNull(index)?.let { onOpen(it.first) } }
@@ -93,8 +94,13 @@ class NewsPanel(
         }
         card.setOnFocusChangeListener { view, focused ->
             val scale = if (focused) 1.05f else 1f
-            view.animate().scaleX(scale).scaleY(scale).setDuration(120).start()
+            view.animate().scaleX(scale).scaleY(scale).alpha(if (focused) 1f else REST_ALPHA).setDuration(120).start()
+            caption.visibility = if (focused) View.VISIBLE else View.GONE
+            dim(!focused)
         }
+        // At rest it blends into the photo: darker and see-through, full brightness when focused
+        card.alpha = REST_ALPHA
+        dim(true)
         box.addView(card, FrameLayout.LayoutParams(width, height))
         box.visibility = View.GONE
     }
@@ -153,8 +159,7 @@ class NewsPanel(
     private fun show(i: Int) {
         if (items.isEmpty()) return
         index = Math.floorMod(i, items.size)
-        val (program, channel) = items[index]
-        kicker.text = context.getString(R.string.news_kicker, appLabel(channel.packageName))
+        val program = items[index].first
         title.text = program.title
         val uri = program.image
         val wanted = index
@@ -202,11 +207,8 @@ class NewsPanel(
         return BitmapDrawable(context.resources, out)
     }
 
-    private fun appLabel(pkg: String) = try {
-        context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(pkg, 0)).toString()
-    } catch (e: Exception) {
-        pkg
-    }
+    private fun dim(on: Boolean) =
+        posters.forEach { if (on) it.setColorFilter(REST_DARKEN, android.graphics.PorterDuff.Mode.SRC_ATOP) else it.clearColorFilter() }
 
     private fun text(sp: Float, color: Int) = TextView(context).apply {
         setTextColor(color)
@@ -221,5 +223,7 @@ class NewsPanel(
         private const val MAX_WIDTH_DP = 140
         private const val MIN_HEIGHT_DP = 130
         private const val FADE_MS = 700L
+        private const val REST_ALPHA = 0.7f
+        private const val REST_DARKEN = 0x40000000
     }
 }

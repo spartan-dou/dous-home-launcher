@@ -7,14 +7,21 @@ import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
 
-/** App tiles in the 16:9 TV banner shape, with an accent frame and a slight zoom on focus. */
+/**
+ * App tiles in the 16:9 TV banner shape, floating on a shadow. Focused: a thin accent frame, a
+ * slight zoom and a deeper shadow, the other tiles of the row dimmed.
+ */
 object Tiles {
     const val MARGIN_DP = 10
+    const val FRAME_DP = 2
+    const val ELEVATION_DP = 4
+    private const val DIMMED = 0.75f
 
     fun height(width: Int) = width * 9 / 16
 
@@ -25,21 +32,36 @@ object Tiles {
         tile.isClickable = true
         tile.isLongClickable = true
         tile.contentDescription = label
-        tile.foreground = FocusFrame(dp(context, 10).toFloat(), dp(context, 3).toFloat())
+        tile.foreground = FocusFrame(dp(context, 10).toFloat(), dp(context, FRAME_DP).toFloat())
         tile.background = context.getDrawable(R.drawable.tile_background)
         val radius = dp(context, 10).toFloat()
         tile.outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(view: View, outline: Outline) = outline.setRoundRect(0, 0, view.width, view.height, radius)
         }
         tile.clipToOutline = true
+        tile.elevation = dp(context, ELEVATION_DP).toFloat()
 
         tile.setOnFocusChangeListener { view, focused ->
             val scale = if (focused) 1.1f else 1f
-            view.animate().scaleX(scale).scaleY(scale).translationZ(if (focused) dp(context, 8).toFloat() else 0f)
+            view.animate().scaleX(scale).scaleY(scale).translationZ(if (focused) dp(context, 10).toFloat() else 0f)
                 .setDuration(120).start()
+            dimSiblings(view)
             onFocus(focused)
         }
         return tile
+    }
+
+    // The focused tile stands out from the rest of its row; no focus in the row, none is dimmed
+    private fun dimSiblings(tile: View) {
+        val row = tile.parent as? ViewGroup ?: return
+        row.post {
+            val any = row.hasFocus()
+            for (i in 0 until row.childCount) {
+                val child = row.getChildAt(i)
+                val alpha = if (!any || child.isFocused) 1f else DIMMED
+                if (child.alpha != alpha) child.animate().alpha(alpha).setDuration(120).start()
+            }
+        }
     }
 
     /** The app banner over the whole tile, or for phone-style apps the icon and the name. */
