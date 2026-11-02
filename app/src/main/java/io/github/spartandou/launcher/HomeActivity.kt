@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -25,12 +26,16 @@ import java.util.concurrent.Executors
 class HomeActivity : Activity() {
     private lateinit var prefs: Prefs
     private lateinit var wall: PhotoWall
+    private lateinit var status: StatusBar
+    private lateinit var weather: Weather
     private lateinit var rowsBox: LinearLayout
     private lateinit var dock: LinearLayout
     private lateinit var topScrim: View
     private lateinit var bottomScrim: View
     private lateinit var clockBox: LinearLayout
-    private lateinit var captionBox: View
+    private lateinit var weatherView: TextView
+    private lateinit var infoBox: LinearLayout
+    private lateinit var statusBox: View
     private lateinit var focusedLabel: TextView
     private lateinit var allApps: View
     private lateinit var grid: GridLayout
@@ -42,18 +47,27 @@ class HomeActivity : Activity() {
     private var gridDirty = true
     private var uiHidden = false
     private var layoutKey = ""
+    private var weatherLoading = false
 
-    // Pictures of the home row tiles, at the current tile size; the "all apps" ones are never kept
+    // Pictures of the home row tiles, per row size; the "all apps" ones are never kept
     private val rowImages = HashMap<String, TileImage>()
 
     private val hideUi = Runnable { setUiHidden(true) }
+
+    // Status every few seconds, weather checked each time too (it only goes online once an hour)
+    private val tick = object : Runnable {
+        override fun run() {
+            if (prefs.showStatus) status.refresh()
+            if (prefs.showWeather) updateWeather()
+            main.postDelayed(this, TICK_MS)
+        }
+    }
 
     // The scrim that fades with the apps: the one on their side of the screen
     private val dockScrim: View
         get() = if (prefs.dockOnTop) topScrim else bottomScrim
 
-    private val tileWidth: Int
-        get() = Tiles.dp(this, Prefs.TILE_WIDTHS[prefs.tileSize.coerceIn(Prefs.TILE_WIDTHS.indices)])
+    private fun tileWidth(row: Int) = Tiles.dp(this, Prefs.TILE_WIDTHS[prefs.rowSize(row)])
 
     // Apps are read once, then again only when one is installed, updated or removed
     private val packageReceiver = object : BroadcastReceiver() {
@@ -67,22 +81,32 @@ class HomeActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_home)
         prefs = Prefs(this)
+        weather = Weather(this)
         rowsBox = findViewById(R.id.rows)
         dock = findViewById(R.id.dock)
         topScrim = findViewById(R.id.top_scrim)
         bottomScrim = findViewById(R.id.bottom_scrim)
         clockBox = findViewById(R.id.clock_box)
-        captionBox = findViewById(R.id.caption_box)
+        weatherView = findViewById(R.id.weather)
+        infoBox = findViewById(R.id.info_box)
+        statusBox = findViewById(R.id.status_box)
         focusedLabel = findViewById(R.id.focused_label)
         allApps = findViewById(R.id.all_apps)
         grid = findViewById(R.id.grid)
+        status = StatusBar(this, findViewById(R.id.status_row))
 
         val slides = findViewById<FrameLayout>(R.id.slides)
-        val captionGlass = findViewById<GlassView>(R.id.caption_glass).apply { cornerRadius = Tiles.dp(context, 18).toFloat() }
+        val pill = Tiles.dp(this, 16).toFloat()
+        val captionGlass = findViewById<GlassView>(R.id.caption_glass).apply { cornerRadius = pill }
+        val statusGlass = findViewById<GlassView>(R.id.status_glass).apply { cornerRadius = pill }
         val allAppsGlass = findViewById<GlassView>(R.id.all_apps_glass).apply { cornerRadius = 0f; tint = 0x99000000.toInt() }
         wall = PhotoWall(this, listOf(slides.getChildAt(0) as FrameLayout, slides.getChildAt(1) as FrameLayout),
-            captionBox, findViewById(R.id.caption), prefs,
-            listOf(findViewById(R.id.dock_glass), captionGlass, allAppsGlass))
+            findViewById(R.id.caption_box), findViewById(R.id.caption), findViewById(R.id.caption_date), prefs,
+            listOf(findViewById(R.id.dock_glass), captionGlass, statusGlass, allAppsGlass)) { blur ->
+            if (prefs.accent == Prefs.ACCENT_AUTO) Accent.set(Accent.fromPhoto(blur), animate = true)
+        }
+        // Only the focused tile shows the accent: redraw it when the colour moves
+        Accent.onChange = { window.decorView.findFocus()?.invalidate() }
 
         registerReceiver(packageReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_PACKAGE_ADDED)
@@ -108,11 +132,14 @@ class HomeActivity : Activity() {
     override fun onResume() {
         super.onResume()
         setUiHidden(false)
+        main.removeCallbacks(tick)
+        tick.run()
     }
 
     override fun onPause() {
         super.onPause()
         main.removeCallbacks(hideUi)
+        main.removeCallbacks(tick)
     }
 
     override fun onStop() {
@@ -122,6 +149,7 @@ class HomeActivity : Activity() {
 
     override fun onDestroy() {
         unregisterReceiver(packageReceiver)
+        Accent.onChange = null
         super.onDestroy()
     }
 
@@ -161,7 +189,26 @@ class HomeActivity : Activity() {
         return super.dispatchKeyEvent(event)
     }
 
-    /** Apps at the top or bottom, clock left / right / centre / hidden (on the other side of the apps). */
+    // A long press on Menu opens the settings
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_MENU) {
+            event.startTracking()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyLongPress(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_MENU) {
+            openSettings()
+            return true
+        }
+        return super.onKeyLongPress(keyCode, event)
+    }
+
+    private fun openSettings() = startActivity(Intent(this, SettingsActivity::class.java))
+
+    /** Apps at the top or bottom; clock left / right / centre / hidden; status and caption in the free corner. */
     private fun applyLayout() {
         val top = prefs.dockOnTop
         val m = Tiles.dp(this, 28)
@@ -192,17 +239,33 @@ class HomeActivity : Activity() {
             topMargin = if (top) 0 else Tiles.dp(this@HomeActivity, 32)
             bottomMargin = if (top) Tiles.dp(this@HomeActivity, 40) else 0
         }
-        // The photo caption takes the corner the clock leaves free
-        (captionBox.layoutParams as FrameLayout.LayoutParams).apply {
-            gravity = vertical or if (clock == Prefs.CLOCK_RIGHT) Gravity.START else Gravity.END
-            topMargin = if (top) 0 else Tiles.dp(this@HomeActivity, 44)
-            bottomMargin = if (top) Tiles.dp(this@HomeActivity, 44) else 0
-            marginStart = Tiles.dp(this@HomeActivity, 56)
-            marginEnd = Tiles.dp(this@HomeActivity, 56)
+        val infoSide = if (clock == Prefs.CLOCK_RIGHT) Gravity.START else Gravity.END
+        infoBox.gravity = infoSide
+        (infoBox.layoutParams as FrameLayout.LayoutParams).apply {
+            gravity = vertical or infoSide
+            topMargin = if (top) 0 else Tiles.dp(this@HomeActivity, 24)
+            bottomMargin = if (top) Tiles.dp(this@HomeActivity, 24) else 0
         }
+        statusBox.visibility = if (prefs.showStatus) View.VISIBLE else View.GONE
+        if (!prefs.showWeather) weatherView.visibility = View.GONE
+        if (prefs.accent != Prefs.ACCENT_AUTO) Accent.set(prefs.accentColor, animate = false)
         topScrim.alpha = 1f
         bottomScrim.alpha = 1f
         findViewById<View>(android.R.id.content).requestLayout()
+    }
+
+    private fun updateWeather() {
+        weather.line()?.let { weatherView.text = it; weatherView.visibility = View.VISIBLE }
+        val city = prefs.weatherCity
+        if (weatherLoading || !weather.stale(city)) return
+        weatherLoading = true
+        worker.execute {
+            val ok = try { weather.refresh(city); true } catch (e: Exception) { Log.w(TAG, "Weather not loaded", e); false }
+            main.post {
+                weatherLoading = false
+                if (ok && prefs.showWeather) weather.line()?.let { weatherView.text = it; weatherView.visibility = View.VISIBLE }
+            }
+        }
     }
 
     private fun scheduleHide() {
@@ -237,54 +300,73 @@ class HomeActivity : Activity() {
         }
     }
 
-    private fun firstTile(): View? = ((rowsBox.getChildAt(0) as? HorizontalScrollView)?.getChildAt(0) as? LinearLayout)?.getChildAt(0)
+    private fun firstTile(): View? = (0 until rowsBox.childCount).firstNotNullOfOrNull { rowTiles(it)?.getChildAt(0) }
 
     private fun rowTiles(index: Int): LinearLayout? = (rowsBox.getChildAt(index) as? HorizontalScrollView)?.getChildAt(0) as? LinearLayout
 
-    /** One scroller per row; "All apps" closes the last row. */
+    /** [Prefs.rowCount] rows, each at its own size; "All apps" and the settings close the last one. */
     private fun buildRows(focusPackage: String? = null) {
         val focused = focusPackage ?: rowsBox.findFocus()?.tag as? String
         rowsBox.removeAllViews()
         val byPackage = apps.associateBy { it.packageName }
-        val rows = prefs.rows.orEmpty().map { row -> row.mapNotNull { byPackage[it] } }.filter { it.isNotEmpty() }
-            .ifEmpty { listOf(emptyList()) }
+        val rows = prefs.homeRows.map { row -> row.mapNotNull { byPackage[it] } }
         var toFocus: View? = null
-        rows.forEachIndexed { rowIndex, row ->
+        rows.forEachIndexed { r, row ->
             val line = newRow()
+            val width = tileWidth(r)
             row.forEach { app ->
-                val tile = appTile(app, rowImages)
+                val tile = appTile(app, width, rowImages)
                 tile.tag = app.packageName
                 tile.setOnClickListener { launch(app) }
                 tile.setOnLongClickListener { editFavourite(app); true }
-                line.addView(tile, tileParams())
+                line.addView(tile, tileParams(width))
                 if (app.packageName == focused) toFocus = tile
             }
-            if (rowIndex == rows.size - 1) {
-                val allTile = Tiles.create(this, getString(R.string.all_apps), prefs.accentColor) {
-                    if (it) focusedLabel.text = getString(R.string.all_apps)
-                }
+            if (r == rows.size - 1) {
+                val allTile = Tiles.create(this, getString(R.string.all_apps)) { if (it) focusedLabel.text = getString(R.string.all_apps) }
                 allTile.tag = ALL_APPS
                 allTile.setOnClickListener { openAllApps() }
+                allTile.setOnLongClickListener { openSettings(); true }
                 Tiles.fill(this, allTile, getString(R.string.all_apps), null, getDrawable(R.drawable.ic_apps))
-                line.addView(allTile, tileParams())
+                line.addView(allTile, tileParams(width))
                 if (focused == ALL_APPS) toFocus = allTile
+
+                // Settings: a narrow square-ish tile, it is not an app
+                val gear = Tiles.create(this, getString(R.string.settings_name)) { if (it) focusedLabel.text = getString(R.string.settings_name) }
+                gear.tag = SETTINGS
+                gear.setOnClickListener { openSettings() }
+                Tiles.fill(this, gear, "", null, getDrawable(R.drawable.ic_settings))
+                line.addView(gear, LinearLayout.LayoutParams(Tiles.height(width), Tiles.height(width)).apply {
+                    val m = Tiles.dp(this@HomeActivity, Tiles.MARGIN_DP)
+                    setMargins(m, 0, m, 0)
+                })
+                if (focused == SETTINGS) toFocus = gear
+            } else if (row.isEmpty()) {
+                // An empty row says how to fill it instead of collapsing
+                line.addView(TextView(this).apply {
+                    text = getString(R.string.empty_row)
+                    setTextColor(0x99FFFFFF.toInt())
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(Tiles.dp(context, 12), 0, 0, 0)
+                }, LinearLayout.LayoutParams(-2, Tiles.height(width)))
             }
         }
         (toFocus ?: firstTile())?.requestFocus()
     }
 
     /** A tile whose picture is rendered on the worker thread, or taken from [cache] when it has it. */
-    private fun appTile(app: App, cache: MutableMap<String, TileImage>?): android.widget.FrameLayout {
-        val tile = Tiles.create(this, app.label, prefs.accentColor) { if (it) focusedLabel.text = app.label }
-        val cached = cache?.get(app.packageName)
+    private fun appTile(app: App, width: Int, cache: MutableMap<String, TileImage>?): FrameLayout {
+        val tile = Tiles.create(this, app.label) { if (it) focusedLabel.text = app.label }
+        val key = "${app.packageName}@$width"
+        val cached = cache?.get(key)
         if (cached != null) {
             Tiles.fill(this, tile, app.label, cached.banner, cached.icon)
         } else {
-            val width = tileWidth
             worker.execute {
                 val image = Apps.tileImage(this, app, width)
                 main.post {
-                    cache?.put(app.packageName, image)
+                    cache?.put(key, image)
                     Tiles.fill(this, tile, app.label, image.banner, image.icon)
                 }
             }
@@ -317,15 +399,15 @@ class HomeActivity : Activity() {
         gridDirty = false
         grid.removeAllViews()
         val favourites = prefs.favourites
-        val width = tileWidth
+        val width = tileWidth(0)
         // As many columns as fit the screen
         grid.columnCount = ((resources.displayMetrics.widthPixels - Tiles.dp(this, 96)) / (width + Tiles.dp(this, 2 * Tiles.MARGIN_DP))).coerceAtLeast(1)
         apps.forEach { app ->
             val star = if (app.packageName in favourites) "★ " else ""
-            val tile = appTile(app, null)
+            val tile = appTile(app, width, null)
             tile.contentDescription = star + app.label
             tile.setOnClickListener { closeAllApps(); launch(app) }
-            tile.setOnLongClickListener { toggleFavourite(app); true }
+            tile.setOnLongClickListener { chooseRow(app); true }
             grid.addView(tile, GridLayout.LayoutParams().apply {
                 this.width = width
                 height = Tiles.height(width)
@@ -354,22 +436,32 @@ class HomeActivity : Activity() {
         scheduleHide()
     }
 
-    private fun toggleFavourite(app: App) {
-        val rows = prefs.rows.orEmpty().map { it.toMutableList() }.toMutableList()
-        val added = rows.none { it.remove(app.packageName) }
-        if (added) {
-            // New favourites go to the end of the first row
-            if (rows.isEmpty()) rows += mutableListOf<String>()
-            rows[0] += app.packageName
+    /** From "all apps": put the app on a row (one choice per row), or take it off the home screen. */
+    private fun chooseRow(app: App) {
+        val rows = prefs.homeRows.map { it.toMutableList() }
+        val current = rows.indexOfFirst { app.packageName in it }
+        val actions = mutableListOf<Pair<String, () -> Unit>>()
+        rows.indices.filter { it != current }.forEach { r ->
+            val label = if (rows.size == 1) getString(R.string.add_home) else getString(R.string.add_to_row, r + 1)
+            actions += label to { rows.forEach { it.remove(app.packageName) }; rows[r] += app.packageName }
         }
-        prefs.rows = rows
-        Toast.makeText(this, getString(if (added) R.string.added else R.string.removed, app.label), Toast.LENGTH_SHORT).show()
-        buildRows(ALL_APPS)
-        gridDirty = true
+        if (current >= 0) actions += getString(R.string.remove) to { rows[current].remove(app.packageName) }
+
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle(app.label)
+            .setItems(actions.map { it.first }.toTypedArray()) { _, which ->
+                actions[which].second()
+                prefs.rows = rows
+                val onHome = rows.any { app.packageName in it }
+                Toast.makeText(this, getString(if (onHome) R.string.added else R.string.removed, app.label), Toast.LENGTH_SHORT).show()
+                buildRows(ALL_APPS)
+                gridDirty = true
+            }
+            .show()
     }
 
     private fun editFavourite(app: App) {
-        val rows = prefs.rows.orEmpty().map { it.toMutableList() }.toMutableList()
+        val rows = prefs.homeRows.map { it.toMutableList() }
         val r = rows.indexOfFirst { app.packageName in it }
         if (r < 0) return
         val i = rows[r].indexOf(app.packageName)
@@ -378,14 +470,7 @@ class HomeActivity : Activity() {
         if (i > 0) actions += getString(R.string.move_left) to { rows[r].add(i - 1, rows[r].removeAt(i)) }
         if (i < rows[r].size - 1) actions += getString(R.string.move_right) to { rows[r].add(i + 1, rows[r].removeAt(i)) }
         if (r > 0) actions += getString(R.string.move_up) to { rows[r].removeAt(i); rows[r - 1] += app.packageName }
-        // Moving down past the last row starts a new one, up to the maximum
-        if (r < rows.size - 1 || (rows.size < Prefs.MAX_ROWS && rows[r].size > 1)) {
-            actions += getString(R.string.move_down) to {
-                rows[r].removeAt(i)
-                if (r + 1 == rows.size) rows += mutableListOf<String>()
-                rows[r + 1] += app.packageName
-            }
-        }
+        if (r < rows.size - 1) actions += getString(R.string.move_down) to { rows[r].removeAt(i); rows[r + 1] += app.packageName }
         actions += getString(R.string.remove) to { rows[r].removeAt(i) }
 
         AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
@@ -409,16 +494,16 @@ class HomeActivity : Activity() {
         }
     }
 
-    private fun tileParams() = tileWidth.let { w ->
-        LinearLayout.LayoutParams(w, Tiles.height(w)).apply {
-            val m = Tiles.dp(this@HomeActivity, Tiles.MARGIN_DP)
-            setMargins(m, 0, m, 0)
-        }
+    private fun tileParams(width: Int) = LinearLayout.LayoutParams(width, Tiles.height(width)).apply {
+        val m = Tiles.dp(this@HomeActivity, Tiles.MARGIN_DP)
+        setMargins(m, 0, m, 0)
     }
 
     companion object {
         private const val TAG = "Home"
         private const val HIDE_DELAY_MS = 30_000L
+        private const val TICK_MS = 5_000L
         private const val ALL_APPS = "all_apps"
+        private const val SETTINGS = "settings"
     }
 }

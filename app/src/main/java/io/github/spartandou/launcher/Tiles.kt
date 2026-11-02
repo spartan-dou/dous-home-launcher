@@ -3,8 +3,6 @@ package io.github.spartandou.launcher
 import android.content.Context
 import android.graphics.Outline
 import android.graphics.drawable.Drawable
-import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.StateListDrawable
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
@@ -21,13 +19,13 @@ object Tiles {
     fun height(width: Int) = width * 9 / 16
 
     /** An empty tile: its picture comes later from [fill], rendered off the main thread. */
-    fun create(context: Context, label: String, accent: Int, onFocus: (Boolean) -> Unit): FrameLayout {
+    fun create(context: Context, label: String, onFocus: (Boolean) -> Unit): FrameLayout {
         val tile = FrameLayout(context)
         tile.isFocusable = true
         tile.isClickable = true
         tile.isLongClickable = true
         tile.contentDescription = label
-        tile.foreground = focusFrame(context, accent)
+        tile.foreground = FocusFrame(dp(context, 10).toFloat(), dp(context, 3).toFloat())
         tile.background = context.getDrawable(R.drawable.tile_background)
         val radius = dp(context, 10).toFloat()
         tile.outlineProvider = object : ViewOutlineProvider() {
@@ -54,10 +52,11 @@ object Tiles {
                 setImageDrawable(banner)
             }, FrameLayout.LayoutParams(-1, -1))
         } else {
-            // Phone-style apps have no banner: icon and name on a dark glass tile
-            tile.addView(ImageView(context).apply { setImageDrawable(icon) },
-                FrameLayout.LayoutParams(dp(context, 44), dp(context, 44), Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(context, 14) })
-            tile.addView(TextView(context).apply {
+            // Phone-style apps have no banner: icon and name on a dark glass tile; an icon alone is centred
+            val iconParams = if (label.isEmpty()) FrameLayout.LayoutParams(dp(context, 40), dp(context, 40), Gravity.CENTER)
+            else FrameLayout.LayoutParams(dp(context, 44), dp(context, 44), Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(context, 14) }
+            tile.addView(ImageView(context).apply { setImageDrawable(icon) }, iconParams)
+            if (label.isNotEmpty()) tile.addView(TextView(context).apply {
                 text = label
                 setTextColor(0xFFFFFFFF.toInt())
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
@@ -70,13 +69,6 @@ object Tiles {
         }
     }
 
-    // Accent-coloured frame, only drawn on the focused tile
-    private fun focusFrame(context: Context, accent: Int) = StateListDrawable().apply {
-        addState(intArrayOf(android.R.attr.state_focused), GradientDrawable().apply {
-            cornerRadius = dp(context, 10).toFloat()
-            setStroke(dp(context, 3), accent)
-        })
-    }
 
     fun dp(context: Context, value: Int) = (value * context.resources.displayMetrics.density + 0.5f).toInt()
 }

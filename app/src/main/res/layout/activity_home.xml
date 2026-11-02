@@ -60,35 +60,100 @@
             android:format24Hour="EEEE d MMMM"
             android:letterSpacing="0.04"
             android:textSize="16sp" />
+
+        <!-- Today's weather, or tomorrow's in the evening -->
+        <TextView
+            android:id="@+id/weather"
+            style="@style/ShadowText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_marginTop="6dp"
+            android:alpha="0.9"
+            android:textSize="16sp"
+            android:visibility="gone" />
     </LinearLayout>
 
-    <!-- Photo place and date, in a glass pill -->
-    <FrameLayout
-        android:id="@+id/caption_box"
+    <!-- The corner the clock leaves free: status pill, then the photo place and date -->
+    <LinearLayout
+        android:id="@+id/info_box"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="top|end"
-        android:layout_marginTop="44dp"
-        android:layout_marginEnd="56dp"
-        android:alpha="0">
+        android:layout_marginStart="36dp"
+        android:layout_marginTop="24dp"
+        android:layout_marginEnd="36dp"
+        android:gravity="end"
+        android:orientation="vertical">
 
-        <io.github.spartandou.launcher.GlassView
-            android:id="@+id/caption_glass"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+        <FrameLayout
+            android:id="@+id/status_box"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
 
-        <TextView
-            android:id="@+id/caption"
+            <io.github.spartandou.launcher.GlassView
+                android:id="@+id/status_glass"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+            <!-- match_parent: with two stretched children FrameLayout sizes the glass to the content -->
+
+            <LinearLayout
+                android:id="@+id/status_row"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="14dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="14dp"
+                android:paddingBottom="6dp" />
+        </FrameLayout>
+
+        <!-- Photo place and date: place in medium weight, date smaller and softer -->
+        <FrameLayout
+            android:id="@+id/caption_box"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:maxWidth="420dp"
-            android:paddingStart="18dp"
-            android:paddingTop="8dp"
-            android:paddingEnd="18dp"
-            android:paddingBottom="8dp"
-            android:textColor="#F2FFFFFF"
-            android:textSize="15sp" />
-    </FrameLayout>
+            android:layout_marginTop="10dp"
+            android:alpha="0">
+
+            <io.github.spartandou.launcher.GlassView
+                android:id="@+id/caption_glass"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="end"
+                android:orientation="vertical"
+                android:paddingStart="16dp"
+                android:paddingTop="8dp"
+                android:paddingEnd="16dp"
+                android:paddingBottom="9dp">
+
+                <TextView
+                    android:id="@+id/caption"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:fontFamily="sans-serif-medium"
+                    android:maxWidth="380dp"
+                    android:maxLines="1"
+                    android:textColor="#FFFFFFFF"
+                    android:textSize="15sp" />
+
+                <TextView
+                    android:id="@+id/caption_date"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:letterSpacing="0.03"
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </FrameLayout>
+    </LinearLayout>
 
     <LinearLayout
         android:id="@+id/dock"

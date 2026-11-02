@@ -71,7 +71,16 @@ class SetupServer(private val prefs: Prefs, private val onChanged: () -> Unit) {
         }
 
         when {
-            path == "/$token" && method == "GET" -> respond(client, 200, connectPage(prefs.serverUrl, null))
+            // Already connected: straight to the photos and weather choices
+            path == "/$token" && method == "GET" -> {
+                val albums = if (prefs.apiKey.isBlank()) null else try {
+                    ImmichClient(prefs.serverUrl, prefs.apiKey).albums()
+                } catch (e: Exception) {
+                    null
+                }
+                respond(client, 200, if (albums != null) albumsPage(albums, null) else connectPage(prefs.serverUrl, null))
+            }
+            path == "/$token/connect" && method == "GET" -> respond(client, 200, connectPage(prefs.serverUrl, null))
             path == "/$token" && method == "POST" -> {
                 if (++attempts > MAX_ATTEMPTS) { respond(client, 429, page("<p>Trop d'essais, rouvrez les réglages sur la TV.</p>")); stop(); return }
                 val form = form() ?: return respond(client, 413, "Too large")
@@ -88,16 +97,25 @@ class SetupServer(private val prefs: Prefs, private val onChanged: () -> Unit) {
                 prefs.serverUrl = host
                 prefs.apiKey = key
                 onChanged()
-                respond(client, 200, albumsPage(albums))
+                respond(client, 200, albumsPage(albums, null))
             }
             path == "/$token/albums" && method == "POST" -> {
                 val form = form() ?: return respond(client, 413, "Too large")
+                // The town is checked first: an unknown one keeps the page open with the choices made
+                val city = form["city"]?.firstOrNull().orEmpty().trim()
+                val known = city.isEmpty() || try { Weather.geocode(city) != null } catch (e: Exception) { false }
                 prefs.albumIds = form["album"].orEmpty().toSet()
                 prefs.memories = form["memories"] != null
+                if (!known) {
+                    onChanged()
+                    val albums = try { ImmichClient(prefs.serverUrl, prefs.apiKey).albums() } catch (e: Exception) { emptyList() }
+                    return respond(client, 200, albumsPage(albums, "Ville introuvable : « $city ». Essayez avec le nom de la commune seul."))
+                }
+                prefs.weatherCity = city
                 onChanged()
                 respond(client, 200, page("<h1>C'est prêt</h1><p>Les photos arrivent sur la TV. Vous pouvez fermer cette page.</p>"))
             }
-            path == "/$token" || path == "/$token/albums" -> respond(client, 405, "Method not allowed")
+            path == "/$token" || path == "/$token/albums" || path == "/$token/connect" -> respond(client, 405, "Method not allowed")
             else -> respond(client, 404, "Not found")
         }
     }
@@ -118,7 +136,7 @@ class SetupServer(private val prefs: Prefs, private val onChanged: () -> Unit) {
         """
     )
 
-    private fun albumsPage(albums: List<Album>): String {
+    private fun albumsPage(albums: List<Album>, error: String?): String {
         val selected = prefs.albumIds
         val items = albums.joinToString("") { album ->
             val checked = if (album.id in selected) "checked" else ""
@@ -129,12 +147,16 @@ class SetupServer(private val prefs: Prefs, private val onChanged: () -> Unit) {
         return page(
             """
             <h1>Photos à afficher</h1>
+            ${error?.let { "<p class=\"error\">${escape(it)}</p>" } ?: ""}
             <form method="post" action="/$token/albums">
               <label class="check strong"><input type="checkbox" name="memories" value="1" $memories>Souvenirs du jour (il y a X ans), mélangés aux albums</label>
               <h2>Albums</h2>
               ${items.ifEmpty { "<p>Aucun album sur ce compte.</p>" }}
+              <h2>Météo</h2>
+              <label>Ville<input name="city" type="text" value="${escape(prefs.weatherCity)}" placeholder="Vide : position de la box (adresse IP)"></label>
               <button type="submit">Enregistrer</button>
             </form>
+            <p class="notice">Connecté à ${escape(prefs.serverUrl)}. <a href="/$token/connect" style="color:#9fb3ff">Changer de serveur ou de clé</a></p>
             """
         )
     }
@@ -147,7 +169,7 @@ class SetupServer(private val prefs: Prefs, private val onChanged: () -> Unit) {
           body { font-family: system-ui, sans-serif; max-width: 460px; margin: 0 auto; padding: 24px 16px; background: #0f1115; color: #eee; }
           h2 { font-size: 15px; margin-top: 28px; color: #aaa; text-transform: uppercase; letter-spacing: .05em; }
           label { display: block; margin: 16px 0 4px; font-weight: 600; }
-          input[type=url], input[type=password] { display: block; width: 100%; box-sizing: border-box; margin-top: 6px; padding: 12px; font-size: 16px; color: #eee; background: #1b1e25; border: 1px solid #333; border-radius: 10px; }
+          input[type=url], input[type=password], input[type=text] { display: block; width: 100%; box-sizing: border-box; margin-top: 6px; padding: 12px; font-size: 16px; color: #eee; background: #1b1e25; border: 1px solid #333; border-radius: 10px; }
           label.check { display: flex; gap: 10px; align-items: center; font-weight: 400; margin: 10px 0; }
           label.check span { margin-left: auto; color: #888; font-size: 13px; }
           label.strong { font-weight: 600; }

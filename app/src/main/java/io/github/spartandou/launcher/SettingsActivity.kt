@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.View
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.ImageView
@@ -27,6 +28,7 @@ class SettingsActivity : Activity() {
     private lateinit var prefs: Prefs
     private lateinit var status: TextView
     private lateinit var albumsBox: LinearLayout
+    private lateinit var weatherPlace: TextView
     private val main = Handler(Looper.getMainLooper())
     private var setup: SetupServer? = null
 
@@ -75,10 +77,21 @@ class SettingsActivity : Activity() {
         right.addView(check(getString(R.string.show_date), prefs.showDate) { prefs.showDate = it })
         right.addView(check(getString(R.string.show_place), prefs.showPlace) { prefs.showPlace = it })
         right.addView(check(getString(R.string.auto_hide), prefs.autoHide) { prefs.autoHide = it })
+        right.addView(check(getString(R.string.show_weather), prefs.showWeather) { prefs.showWeather = it })
+        weatherPlace = text("", 14f).apply { alpha = 0.7f; setPadding(dp(36), 0, 0, dp(4)) }
+        right.addView(weatherPlace)
+        right.addView(check(getString(R.string.show_status), prefs.showStatus) { prefs.showStatus = it })
 
         right.addView(header(getString(R.string.layout)))
         right.addView(cycle(R.string.dock_position, R.array.dock_positions, { if (prefs.dockOnTop) 1 else 0 }) { prefs.dockOnTop = it == 1 })
-        right.addView(cycle(R.string.tile_size, R.array.tile_sizes, { prefs.tileSize }) { prefs.tileSize = it })
+        // One size button per row, only for the rows in use
+        val sizes = (0 until Prefs.MAX_ROWS).map { row ->
+            cycle(R.string.row_size, R.array.tile_sizes, { prefs.rowSize(row) }, row + 1) { prefs.setRowSize(row, it) }
+        }
+        fun showSizes() = sizes.forEachIndexed { row, button -> button.visibility = if (row < prefs.rowCount) View.VISIBLE else View.GONE }
+        right.addView(cycle(R.string.row_count, R.array.row_counts, { prefs.rowCount - 1 }) { prefs.rowCount = it + 1; showSizes() })
+        sizes.forEach { right.addView(it) }
+        showSizes()
         right.addView(cycle(R.string.clock_position, R.array.clock_positions, { prefs.clockPosition }) { prefs.clockPosition = it })
         right.addView(cycle(R.string.accent, R.array.accents, { prefs.accent }) { prefs.accent = it })
         root.addView(ScrollView(this).apply { addView(right) }, LinearLayout.LayoutParams(0, -1, 1f))
@@ -110,6 +123,8 @@ class SettingsActivity : Activity() {
     private fun refreshStatus() {
         status.text = if (prefs.apiKey.isBlank()) getString(R.string.not_connected_yet)
         else getString(R.string.connected_to, prefs.serverUrl)
+        val place = prefs.weatherCity.ifBlank { Weather(this).placeName?.let { "$it, " + getString(R.string.weather_auto) } ?: getString(R.string.weather_auto) }
+        weatherPlace.text = getString(R.string.weather_place, place) + "\n" + getString(R.string.weather_city_hint)
     }
 
     private fun loadAlbums() {
@@ -141,13 +156,16 @@ class SettingsActivity : Activity() {
     }
 
     // A button that steps through the choices of a string array, showing the current one
-    private fun cycle(label: Int, choices: Int, get: () -> Int, set: (Int) -> Unit): Button {
+    private fun cycle(label: Int, choices: Int, get: () -> Int, number: Int? = null, set: (Int) -> Unit): Button {
         val names = resources.getStringArray(choices)
         val button = button()
         fun refresh() {
-            button.text = getString(label, names[get().coerceIn(names.indices)])
-            // The accent button shows its own colour
-            if (choices == R.array.accents) button.setTextColor(prefs.accentColor)
+            val name = names[get().coerceIn(names.indices)]
+            button.text = if (number != null) getString(label, number, name) else getString(label, name)
+            // The accent button shows its own colour (white for the automatic one)
+            if (choices == R.array.accents) {
+                button.setTextColor(if (prefs.accent == Prefs.ACCENT_AUTO) Color.WHITE else prefs.accentColor)
+            }
         }
         refresh()
         button.setOnClickListener { set((get() + 1) % names.size); refresh() }

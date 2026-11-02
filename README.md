@@ -20,18 +20,26 @@ Connexion depuis le téléphone : *Réglages de l'accueil* affiche un QR code. L
 |---|---|---|
 | Rangée d'accueil | OK | Ouvre l'appli |
 | Rangée d'accueil | Appui long sur OK | Déplacer à gauche ou à droite, vers la rangée du dessus ou du dessous, retirer |
-| Toutes les applis | Appui long sur OK | Ajouter à l'accueil (fin de la première rangée) ou retirer |
+| Toutes les applis | Appui long sur OK | Mettre sur une rangée, ou retirer de l'accueil |
+| « Toutes les applis » de l'accueil | Appui long sur OK | Ouvre les réglages |
+| Partout | Appui long sur Menu | Ouvre les réglages |
 | Partout | Accueil | Revient à la première appli |
 
-Jusqu'à 3 rangées d'applis. Une rangée se crée quand on y déplace une appli et disparaît quand elle est vide.
+Les réglages s'ouvrent aussi par la roue dentée en fin de dernière rangée.
 
 Après 30 s sans toucher la télécommande, les applis s'effacent et seule la photo reste. La première touche les fait revenir, sans rien lancer.
 
+**Sous l'heure**, la météo du jour, ou celle du lendemain à partir de 18 h ([Open-Meteo](https://open-meteo.com), sans compte). La ville se choisit sur la page du téléphone ; laissée vide, c'est celle de l'adresse IP de la box ([ipwho.is](https://ipwho.is)). Une requête par heure au plus, seulement quand l'accueil est affiché.
+
+**En haut à droite**, une pastille avec la connexion (Wi-Fi ou Ethernet) et la RAM utilisée par la Shield, puis le lieu et la date de la photo. La charge du processeur et les piles de la télécommande ne sont pas lisibles par une appli sur la Shield (Android 8+ et service NVIDIA).
+
 **Mise en page**, dans *Réglages de l'accueil* :
 - applis en bas ou en haut de l'écran ;
-- taille des vignettes : petite, moyenne ou grande ;
-- horloge à gauche, à droite, au centre ou masquée (du côté opposé aux applis), la légende de la photo prenant le coin libre ;
-- couleur d'accent du cadre de focus : blanc, bleu glacier, lavande, rose, ambre ou menthe.
+- 1 à 3 rangées d'applis, chacune petite, moyenne ou grande ;
+- horloge à gauche, à droite, au centre ou masquée (du côté opposé aux applis), la barre d'état et la légende de la photo prenant le coin libre ;
+- couleur d'accent du cadre de focus : blanc, bleu glacier, lavande, rose, ambre, menthe, ou automatique (la couleur la plus vive de chaque photo, tirée de sa copie floutée).
+
+**Mémoire mesurée** (Shield 2019, 2 Go) : ~111 Mo accueil affiché, ~37 Mo pendant un film, dont environ 50 Mo à l'écran imposés par la pile graphique de la Shield à toute appli affichée.
 
 ## Compilation
 

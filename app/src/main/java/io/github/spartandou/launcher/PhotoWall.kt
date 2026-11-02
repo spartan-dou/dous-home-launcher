@@ -31,8 +31,11 @@ class PhotoWall(
     private val slides: List<FrameLayout>,
     private val captionBox: View,
     private val caption: TextView,
+    private val captionDate: TextView,
     private val prefs: Prefs,
     private val glass: List<GlassView>,
+    // Each new photo's blurred copy, for the automatic accent colour
+    private val onPhoto: (Bitmap) -> Unit,
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
@@ -210,6 +213,7 @@ class PhotoWall(
         // Portrait photos sit on a blurred, darkened copy of themselves; the glass surfaces use it too
         (slide.getChildAt(0) as ImageView).setImageBitmap(if (portrait) blur else null)
         glass.forEach { it.setBlur(blur, FADE_MS) }
+        blur?.let(onPhoto)
 
         val oldPhoto = shownPhoto
         val oldBlur = shownBlur
@@ -232,20 +236,22 @@ class PhotoWall(
         updateCaption(photo)
     }
 
+    // Place on the first line, date below it; a single line when only one of them is shown
     private fun updateCaption(photo: Photo?) {
-        val text = listOfNotNull(
-            photo?.place?.takeIf { prefs.showPlace },
-            photo?.date?.takeIf { prefs.showDate },
-        ).joinToString("  ·  ")
+        val place = photo?.place?.takeIf { prefs.showPlace }
+        val date = photo?.date?.takeIf { prefs.showDate }
         captionBox.animate().cancel()
         captionBox.alpha = 0f
-        caption.text = text
-        if (text.isNotEmpty()) captionBox.animate().alpha(1f).setStartDelay(FADE_MS / 2).setDuration(FADE_MS).start()
+        caption.text = place ?: date ?: ""
+        captionDate.text = if (place != null) date ?: "" else ""
+        captionDate.visibility = if (captionDate.text.isEmpty()) View.GONE else View.VISIBLE
+        if (place != null || date != null) captionBox.animate().alpha(1f).setStartDelay(FADE_MS / 2).setDuration(FADE_MS).start()
     }
 
     private fun showMessage(text: String) {
         captionBox.animate().cancel()
         caption.text = text
+        captionDate.visibility = View.GONE
         captionBox.alpha = 1f
     }
 

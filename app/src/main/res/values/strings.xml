@@ -26,7 +26,13 @@
         <item>en bas</item>
         <item>en haut</item>
     </string-array>
-    <string name="tile_size">Taille des vignettes : %1$s</string>
+    <string name="row_count">Rangées d\'applis : %1$s</string>
+    <string-array name="row_counts">
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+    </string-array>
+    <string name="row_size">Taille de la rangée %1$d : %2$s</string>
     <string-array name="tile_sizes">
         <item>petite</item>
         <item>moyenne</item>
@@ -47,6 +53,7 @@
         <item>rose</item>
         <item>ambre</item>
         <item>menthe</item>
+        <item>automatique (couleur de la photo)</item>
     </string-array>
     <string name="added">%1$s ajouté à l\'accueil</string>
     <string name="removed">%1$s retiré de l\'accueil</string>
@@ -54,4 +61,15 @@
     <string name="show_date">Afficher la date de la photo</string>
     <string name="show_place">Afficher le lieu de la photo</string>
     <string name="auto_hide">Masquer les applis après 30 s sans toucher la télécommande</string>
+    <string name="empty_row">Rangée vide : appui long sur une appli pour l\'y déplacer</string>
+    <string name="add_home">Ajouter à l\'accueil</string>
+    <string name="add_to_row">Mettre sur la rangée %1$d</string>
+    <string name="status_wifi">Wi-Fi</string>
+    <string name="status_ethernet">Ethernet</string>
+    <string name="status_offline">Hors ligne</string>
+    <string name="show_weather">Afficher la météo sous l\'heure (demain à partir de 18 h)</string>
+    <string name="weather_place">Météo : %1$s</string>
+    <string name="weather_auto">position de la box (adresse IP)</string>
+    <string name="weather_city_hint">La ville se change sur la page du téléphone (QR code)</string>
+    <string name="show_status">Afficher la barre d\'état (connexion, RAM)</string>
 </resources>
