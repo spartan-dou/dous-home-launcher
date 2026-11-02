@@ -235,6 +235,9 @@ class SettingsActivity : Activity() {
         val rows = prefs.appRows.orEmpty()
         add(pick(getString(R.string.visible_rows_label), array(R.array.row_counts), { prefs.visibleRows - 1 }) { prefs.visibleRows = it + 1 })
         add(pick(getString(R.string.dock_label), array(R.array.dock_positions), { if (prefs.dockOnTop) 1 else 0 }) { prefs.dockOnTop = it == 1 })
+        if (rows.any { it.pinned }) {
+            add(pick(getString(R.string.pinned_position), array(R.array.pinned_positions), { if (prefs.pinnedOnTop) 0 else 1 }) { prefs.pinnedOnTop = it == 0 })
+        }
         add(subheader(getString(R.string.your_rows)))
         val sizes = array(R.array.tile_sizes)
         rows.forEachIndexed { i, row ->
@@ -244,7 +247,7 @@ class SettingsActivity : Activity() {
                 val installed = apps?.let { list -> row.apps.count { pkg -> list.any { it.packageName == pkg } } } ?: row.apps.size
                 resources.getQuantityString(R.plurals.app_count, installed, installed) + " · " + sizes[row.size]
             }
-            add(choice(rowName(row, i), { summary }) { editedRow = i; refresh(focus = 1) })
+            add(choice(rowName(row, i), { if (row.pinned) "$summary · ${getString(R.string.pinned)}" else summary }) { editedRow = i; refresh(focus = 1) })
         }
         add(action(getString(R.string.add_row)) {
             val updated = rows + AppRow(getString(R.string.row_n, rows.size + 1), 1, mutableListOf())
@@ -296,6 +299,13 @@ class SettingsActivity : Activity() {
             editText(getString(R.string.row_title), row.title, getString(R.string.row_title_hint)) { row.title = it; save(); refresh() }
         })
         add(pick(getString(R.string.row_size_label), array(R.array.tile_sizes), { row.size }) { row.size = it; save() })
+        // One pinned row at most: ticking this one unpins the others
+        add(check(getString(R.string.pin_row), row.pinned) { checked ->
+            rows.forEach { it.pinned = false }
+            row.pinned = checked
+            save()
+        })
+        add(hint(getString(R.string.pin_row_hint)))
 
         if (row.continueWatching) continueSources(row) { save() } else {
             add(subheader(getString(R.string.row_apps)))

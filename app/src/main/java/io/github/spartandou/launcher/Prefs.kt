@@ -82,6 +82,11 @@ class Prefs(context: Context) {
         get() = prefs.getInt("row_count", 1).coerceIn(1, MAX_VISIBLE_ROWS)
         set(value) = prefs.edit().putInt("row_count", value).apply()
 
+    /** Where the pinned row stays: above the scrolling rows, or below them. */
+    var pinnedOnTop: Boolean
+        get() = prefs.getBoolean("pinned_top", true)
+        set(value) = prefs.edit().putBoolean("pinned_top", value).apply()
+
     var clockSize: Int
         get() = prefs.getInt("clock_size", 1).coerceIn(CLOCK_SIZES.indices)
         set(value) = prefs.edit().putInt("clock_size", value).apply()
@@ -117,7 +122,7 @@ class Prefs(context: Context) {
 
     /** Changes whenever the layout changes, so the home screen rebuilds it. */
     val layoutKey: String
-        get() = "$dockOnTop|$visibleRows|${prefs.getString("app_rows", "")}|$clockPosition|$clockSize|$accent|" +
+        get() = "$dockOnTop|$visibleRows|${prefs.getString("app_rows", "")}|$pinnedOnTop|$clockPosition|$clockSize|$accent|" +
             "$showWeather|$showStatus"
 
     companion object {
@@ -148,9 +153,16 @@ class Prefs(context: Context) {
  * watching" row lists programs instead, and [apps] are then the apps they may come from (empty:
  * all of them).
  */
-data class AppRow(var title: String, var size: Int, val apps: MutableList<String>, val continueWatching: Boolean = false) {
+data class AppRow(
+    var title: String,
+    var size: Int,
+    val apps: MutableList<String>,
+    val continueWatching: Boolean = false,
+    // Always on screen when two rows or more are visible; the others scroll past it
+    var pinned: Boolean = false,
+) {
     fun toJson(): JSONObject = JSONObject().put("title", title).put("size", size).put("apps", JSONArray(apps))
-        .apply { if (continueWatching) put("type", TYPE_CONTINUE) }
+        .apply { if (continueWatching) put("type", TYPE_CONTINUE); if (pinned) put("pinned", true) }
 
     companion object {
         private const val TYPE_CONTINUE = "continue"
@@ -162,6 +174,7 @@ data class AppRow(var title: String, var size: Int, val apps: MutableList<String
                 o.optInt("size", 2).coerceIn(Prefs.TILE_WIDTHS.indices),
                 (0 until (apps?.length() ?: 0)).map { apps!!.getString(it) }.toMutableList(),
                 o.optString("type") == TYPE_CONTINUE,
+                o.optBoolean("pinned"),
             )
         }
     }

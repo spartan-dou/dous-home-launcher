@@ -193,9 +193,9 @@ class HomeActivity : Activity() {
     }
 
     /**
-     * Moving through the rows. Up from the very first row reaches "All apps" and the settings (the
-     * only way to them); past the visible rows the window slides by one; down from the last row
-     * goes back to the first. Left/right stay within the row.
+     * Moving through the rows. Up from the top row reaches "All apps" and the settings when it is
+     * the first row (or the pinned one); past the scrolling rows the window slides by one; down
+     * from the bottom row goes back to the first. Left/right stay within the row.
      */
     private fun shiftRows(keyCode: Int): Boolean {
         val focus = currentFocus ?: return false
@@ -203,32 +203,43 @@ class HomeActivity : Activity() {
         if (band < 0) return false
         val line = rowLines[band]
         val column = line.indexOfChild(focus)
+        // The scrolling bands, between or beside the pinned one
+        val window = rowLines.indices.filter { !bandPinned[it] }
+        val windowFirst = window.firstOrNull() ?: -1
+        val windowLast = window.lastOrNull() ?: -1
+        val target: Int
         when (keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT -> return column == 0
             KeyEvent.KEYCODE_DPAD_RIGHT -> return column == line.childCount - 1
             KeyEvent.KEYCODE_DPAD_UP -> {
-                if (band > 0) return false
-                if (rowOffset == 0) {
+                if (band == windowFirst && rowOffset > 0) {
+                    rowOffset -= 1
+                    target = windowFirst
+                } else if (band == 0) {
                     rowsBox.findViewWithTag<View>(ALL_APPS)?.requestFocus()
                     return true
+                } else {
+                    return false
                 }
-                rowOffset -= 1
             }
             KeyEvent.KEYCODE_DPAD_DOWN -> {
-                if (band < rowLines.size - 1) return false
-                // Rows read top to bottom on screen whatever the dock position
-                if (rowOffset + rowLines.size < shownRows) rowOffset += 1 else rowOffset = 0
+                if (band == windowLast && rowOffset + window.size < shownRows) {
+                    rowOffset += 1
+                    target = windowLast
+                } else if (band == rowLines.size - 1) {
+                    // Rows read top to bottom on screen whatever the dock position
+                    rowOffset = 0
+                    target = 0
+                } else {
+                    return false
+                }
             }
             else -> return false
         }
         // No focused app to follow: that would bring the old row back into view
         buildRows(NO_FOCUS)
-        val target = when {
-            keyCode == KeyEvent.KEYCODE_DPAD_UP -> rowLines.first()
-            rowOffset == 0 -> rowLines.first()
-            else -> rowLines.last()
-        }
-        (target.getChildAt(column.coerceAtMost(target.childCount - 1))?.takeIf { it.isFocusable } ?: firstTile())?.requestFocus()
+        val into = rowLines[target.coerceAtMost(rowLines.size - 1)]
+        (into.getChildAt(column.coerceAtMost(into.childCount - 1))?.takeIf { it.isFocusable } ?: firstTile())?.requestFocus()
         return true
     }
 
@@ -342,6 +353,8 @@ class HomeActivity : Activity() {
     // Index of the first visible row, when there are more rows than visible ones
     private var rowOffset = 0
     private var shownRows = 0
+    // Per band on screen: true for the pinned row (it never scrolls)
+    private val bandPinned = mutableListOf<Boolean>()
 
     // "Continue watching" entries and their tile pictures
     private var programs: List<Program> = emptyList()
@@ -350,14 +363,16 @@ class HomeActivity : Activity() {
     private fun firstTile(): View? = rowLines.firstNotNullOfOrNull { it.getChildAt(0)?.takeIf { v -> v.isFocusable } }
 
     /**
-     * The visible window of rows, one band each (title, glass, tiles). Rows with nothing to show
-     * are left out. "All apps" and the settings are two small round buttons on the first band's
-     * title line, they take no app's place.
+     * The visible rows, one band each (title, glass, tiles). Rows with nothing to show are left
+     * out. With two visible rows or more, a pinned row stays on screen (above or below) and the
+     * others scroll in the remaining places. "All apps" and the settings are two small round
+     * buttons on the top band's title line when it is the first row; they take no app's place.
      */
     private fun buildRows(focusPackage: String? = null) {
         val focused = focusPackage ?: rowsBox.findFocus()?.tag as? String
         rowsBox.removeAllViews()
         rowLines.clear()
+        bandPinned.clear()
         val byPackage = apps.associateBy { it.packageName }
         // What each row shows: its installed apps, or its programs
         val shown = prefs.appRows.orEmpty().map { row ->
@@ -365,20 +380,31 @@ class HomeActivity : Activity() {
         }.filter { it.second.isNotEmpty() }
         // Nothing at all: one empty band still carries the round buttons
         val rows = shown.ifEmpty { listOf(AppRow("", 2, mutableListOf()) to emptyList()) }
-        shownRows = rows.size
         val visible = prefs.visibleRows.coerceAtMost(rows.size)
-        rowOffset = rowOffset.coerceIn(0, rows.size - visible)
-        // A focused app on another row brings its row into view
-        rows.indexOfFirst { (row, _) -> !row.continueWatching && focused in row.apps }.takeIf { it >= 0 }?.let { r ->
-            if (r < rowOffset) rowOffset = r else if (r >= rowOffset + visible) rowOffset = r - visible + 1
+        val pinned = if (visible >= 2) rows.firstOrNull { it.first.pinned } else null
+        val others = rows.filter { it !== pinned }
+        val window = if (pinned != null) visible - 1 else visible
+        shownRows = others.size
+        rowOffset = rowOffset.coerceIn(0, others.size - window)
+        // A focused app on a hidden row brings its row into view
+        others.indexOfFirst { (row, _) -> !row.continueWatching && focused in row.apps }.takeIf { it >= 0 }?.let { r ->
+            if (r < rowOffset) rowOffset = r else if (r >= rowOffset + window) rowOffset = r - window + 1
         }
+        // Bands top to bottom: the pinned one first or last, the scrolling window in between
+        val bands = mutableListOf<Pair<Pair<AppRow, List<Any>>, Int?>>()
+        val windowBands = (0 until window).map { others[rowOffset + it] to rowOffset + it }
+        if (pinned != null && prefs.pinnedOnTop) bands += pinned to null
+        bands += windowBands
+        if (pinned != null && !prefs.pinnedOnTop) bands += pinned to null
+
         var toFocus: View? = null
-        for (b in 0 until visible) {
-            val r = rowOffset + b
-            val (row, items) = rows[r]
-            val position = if (rows.size > visible) "${r + 1} / ${rows.size}" else null
-            // The round buttons only above the very first row
-            val (line, name) = newBand(row.title, first = b == 0 && r == 0, position = position)
+        bands.forEachIndexed { b, (entry, index) ->
+            val (row, items) = entry
+            val position = if (index != null && others.size > window) "${index + 1} / ${others.size}" else null
+            // The round buttons only above the very first row (or the pinned one on top)
+            val first = b == 0 && (index == null || index == 0)
+            val (line, name) = newBand(row.title, first = first, position = position)
+            bandPinned += index == null
             val width = Tiles.dp(this, Prefs.TILE_WIDTHS[row.size])
             items.forEach { item ->
                 val tile = when (item) {
@@ -547,7 +573,9 @@ class HomeActivity : Activity() {
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            // The focused round buttons grow past the padding: neither clip them
             clipChildren = false
+            clipToPadding = false
             setPadding(Tiles.dp(context, 22), 0, Tiles.dp(context, 8), Tiles.dp(context, 6))
         }
         if (title.isNotEmpty()) header.addView(shadowed(title, 17f, Color.WHITE).apply {

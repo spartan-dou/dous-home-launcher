@@ -126,12 +126,15 @@
         </LinearLayout>
     </LinearLayout>
 
+    <!-- paddingTop: room above the first title line, where a focused round button grows -->
+
     <LinearLayout
         android:id="@+id/dock"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:clipChildren="false"
         android:clipToPadding="false"
+        android:paddingTop="10dp"
         android:layout_gravity="bottom"
         android:layout_marginBottom="28dp"
         android:orientation="vertical">

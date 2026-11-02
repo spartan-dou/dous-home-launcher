@@ -123,6 +123,14 @@
     <string name="delete_row">Supprimer la rangée</string>
     <string name="delete_row_confirm">Supprimer « %1$s » ? Ses applis restent installées et dans « Toutes les applis ».</string>
     <string name="delete">Supprimer</string>
+    <string name="pin_row">Rangée fixe (toujours visible)</string>
+    <string name="pin_row_hint">Avec au moins deux rangées visibles, elle reste à l\'écran et les autres défilent à côté.</string>
+    <string name="pinned">fixe</string>
+    <string name="pinned_position">Position de la rangée fixe</string>
+    <string-array name="pinned_positions">
+        <item>en haut</item>
+        <item>en bas</item>
+    </string-array>
 
     <!-- Connection -->
     <string name="scan_qr_url">Scannez avec le téléphone, ou ouvrez\n%1$s</string>
