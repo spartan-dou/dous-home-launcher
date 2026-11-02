@@ -102,6 +102,8 @@ class HomeActivity : Activity() {
         news = NewsPanel(this, findViewById(R.id.news_box)) { program -> openProgram(program) }
         // The poster takes the height the rows leave free between them and the top (or bottom)
         dock.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom -> if (top != oldTop || bottom != oldBottom) fitNews() }
+        // It sits under the clock, whose height changes with its size and the weather line
+        clockBox.addOnLayoutChangeListener { _, _, _, _, bottom, _, _, _, oldBottom -> if (bottom != oldBottom) fitNews() }
 
         val slides = findViewById<FrameLayout>(R.id.slides)
         findViewById<GlassView>(R.id.all_apps_glass).apply { cornerRadius = 0f; tint = 0x99000000.toInt() }
@@ -406,7 +408,9 @@ class HomeActivity : Activity() {
         }.filter { it.second.isNotEmpty() }
         // Nothing at all: one empty band still carries the round buttons
         val rows = shown.ifEmpty { listOf(AppRow("", 2, mutableListOf()) to emptyList()) }
-        val visible = prefs.visibleRows.coerceAtMost(rows.size)
+        // The carousel shows one row at a time (and so no pinned row)
+        val carousel = prefs.carousel
+        val visible = (if (carousel) 1 else prefs.visibleRows).coerceAtMost(rows.size)
         val pinned = if (visible >= 2) rows.firstOrNull { it.first.pinned } else null
         val others = rows.filter { it !== pinned }
         val window = if (pinned != null) visible - 1 else visible
@@ -429,17 +433,17 @@ class HomeActivity : Activity() {
             val position = if (index != null && others.size > window) "${index + 1} / ${others.size}" else null
             // The round buttons only above the very first row (or the pinned one on top)
             val first = b == 0 && (index == null || index == 0)
-            val width = Tiles.dp(this, Prefs.TILE_WIDTHS[row.size])
-            val (line, name) = newBand(row.title, first = first, position = position, tileWidth = width)
+            val width = Tiles.dp(this, if (carousel) Prefs.CAROUSEL_WIDTH else Prefs.TILE_WIDTHS[row.size])
+            val (line, name) = newBand(row.title, first = first, position = position, tileWidth = width, carousel = carousel)
             bandPinned += index == null
             items.forEach { item ->
                 val tile = when (item) {
-                    is App -> appTile(item, width, rowImages, name).apply {
+                    is App -> appTile(item, width, rowImages, name, zoom = !carousel).apply {
                         tag = item.packageName
                         setOnClickListener { launch(item) }
                         setOnLongClickListener { editFavourite(item); true }
                     }
-                    is Program -> programTile(item, width, name)
+                    is Program -> programTile(item, width, name, zoom = !carousel)
                     else -> return@forEach
                 }
                 line.addView(tile, tileParams(width))
@@ -465,10 +469,11 @@ class HomeActivity : Activity() {
      * A "continue watching" entry: its still, a progress bar when known. Focused for a moment, it
      * puts its picture behind the home screen instead of the photo.
      */
-    private fun programTile(program: Program, width: Int, name: TileName): FrameLayout {
+    private fun programTile(program: Program, width: Int, name: TileName, zoom: Boolean): FrameLayout {
         val label = listOfNotNull(program.title, program.subtitle).joinToString("  ·  ")
-        val tile = Tiles.create(this, program.title) { focused ->
+        val tile = Tiles.create(this, program.title, zoom) { focused ->
             name.show(currentFocus, if (focused) label else null)
+            if (focused && !zoom) arrangeCarousel()
             if (focused) focusMedia(program) else main.post { if (currentFocus?.tag !is Long) leaveMedia() }
         }
         tile.tag = program.id
@@ -559,13 +564,24 @@ class HomeActivity : Activity() {
             params.topMargin = 0
             params.bottomMargin = Tiles.dp(this, 40)
             root.height - dock.bottom - params.bottomMargin - margins
+        } else if (clockBox.visibility == View.VISIBLE) {
+            // Under the clock, on its side, down to the rows
+            val side = if (prefs.clockPosition == Prefs.CLOCK_RIGHT) Gravity.END else Gravity.START
+            params.gravity = Gravity.TOP or (if (prefs.clockPosition == Prefs.CLOCK_CENTER) Gravity.CENTER_HORIZONTAL else side)
+            params.topMargin = clockBox.bottom + Tiles.dp(this, NEWS_UNDER_CLOCK_DP) - newsBox.paddingTop
+            params.bottomMargin = 0
+            dock.top + dock.paddingTop - params.topMargin - margins
         } else {
-            // Right under the status icons, down to the rows
+            // No clock: right under the status icons
             params.gravity = Gravity.TOP or Gravity.END
             params.topMargin = Tiles.dp(this, NEWS_TOP_DP)
             params.bottomMargin = 0
             dock.top + dock.paddingTop - params.topMargin - margins
         }
+        // Lined up with the clock's edge (the box has a padding for the focus zoom)
+        val edge = (clockBox.layoutParams as FrameLayout.LayoutParams).marginStart - newsBox.paddingStart
+        params.marginStart = edge
+        params.marginEnd = edge
         newsBox.layoutParams = params
         news.fit(available)
     }
@@ -601,9 +617,12 @@ class HomeActivity : Activity() {
     }
 
     /** A tile whose picture is rendered on the worker thread, or taken from [cache] when it has it. */
-    private fun appTile(app: App, width: Int, cache: MutableMap<String, TileImage>?, name: TileName?): FrameLayout {
+    private fun appTile(app: App, width: Int, cache: MutableMap<String, TileImage>?, name: TileName?, zoom: Boolean = true): FrameLayout {
         // Focused, the tile is the current focus: its name goes under it
-        val tile = Tiles.create(this, app.label) { name?.show(currentFocus, if (it) app.label else null) }
+        val tile = Tiles.create(this, app.label, zoom) {
+            name?.show(currentFocus, if (it) app.label else null)
+            if (it && !zoom) arrangeCarousel()
+        }
         val key = "${app.packageName}@$width"
         val cached = cache?.get(key)
         if (cached != null) {
@@ -620,8 +639,8 @@ class HomeActivity : Activity() {
         return tile
     }
 
-    /** The focused tile's name, centred under it; follows it when the row scrolls. */
-    private class TileName(val view: TextView, private val scroller: HorizontalScrollView) {
+    /** The focused tile's name, centred under it; follows it when the row scrolls (no scroller: stays centred). */
+    private class TileName(val view: TextView, private val scroller: HorizontalScrollView?) {
         private var tile: View? = null
 
         // A new row is not laid out yet when its tile takes the focus: placed again once it is
@@ -637,6 +656,7 @@ class HomeActivity : Activity() {
 
         fun place() {
             val t = tile ?: return
+            if (scroller == null) return
             val x = t.left + t.width / 2f - scroller.scrollX - view.width / 2f
             view.translationX = x.coerceIn(0f, (scroller.width - view.width).coerceAtLeast(0).toFloat())
         }
@@ -647,7 +667,8 @@ class HomeActivity : Activity() {
      * first band the two round buttons, the row position when some rows are hidden), then the
      * tiles floating on the photo, then the focused tile's name under it.
      */
-    private fun newBand(title: String, first: Boolean, position: String?, tileWidth: Int): Pair<LinearLayout, TileName> {
+    private fun newBand(title: String, first: Boolean, position: String?, tileWidth: Int, carousel: Boolean): Pair<LinearLayout, TileName> {
+        if (carousel) return carouselBand(title, first, position)
         val band = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; clipChildren = false; clipToPadding = false }
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -710,6 +731,95 @@ class HomeActivity : Activity() {
         rowLines += line
         return line to name
     }
+
+    /**
+     * The carousel's band: centred on top the row (title, position) and the focused app's name, on
+     * the first row the round buttons at the right; under them the tiles, not scrolled but moved
+     * and scaled around the focused one in the middle.
+     */
+    private fun carouselBand(title: String, first: Boolean, position: String?): Pair<LinearLayout, TileName> {
+        val band = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; clipChildren = false; clipToPadding = false }
+        val line = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            clipChildren = false
+            clipToPadding = false
+            val pad = Tiles.dp(context, 14)
+            setPadding(pad, pad, pad, pad)
+            addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> arrangeCarousel(animate = false) }
+        }
+
+        val header = FrameLayout(this).apply { clipChildren = false; clipToPadding = false }
+        val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
+        val rowLabel = listOfNotNull(title.uppercase().ifEmpty { null }, position).joinToString("  ·  ")
+        if (rowLabel.isNotEmpty()) labels.addView(shadowed(rowLabel, 12f, 0xB3FFFFFF.toInt()).apply {
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            letterSpacing = 0.16f
+            gravity = Gravity.CENTER_HORIZONTAL
+        }, LinearLayout.LayoutParams(-1, -2))
+        val nameView = shadowed("", 17f, Color.WHITE).apply {
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            gravity = Gravity.CENTER_HORIZONTAL
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+        labels.addView(nameView, LinearLayout.LayoutParams(-1, -2))
+        header.addView(labels, FrameLayout.LayoutParams(-1, -2))
+        if (first) {
+            // A focused round button says its name where the app's shows
+            val buttons = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                clipChildren = false
+                clipToPadding = false
+                setPadding(0, 0, Tiles.dp(context, 8), 0)
+            }
+            buttons.addView(roundButton(R.drawable.ic_apps, getString(R.string.all_apps), ALL_APPS, nameView) { openAllApps() }
+                .apply { setOnLongClickListener { openSettings(); true } })
+            buttons.addView(roundButton(R.drawable.ic_settings, getString(R.string.settings_name), SETTINGS, nameView) { openSettings() })
+            header.addView(buttons, FrameLayout.LayoutParams(-2, -2, Gravity.END or Gravity.CENTER_VERTICAL))
+        }
+        band.addView(header, LinearLayout.LayoutParams(-1, -2))
+        band.addView(line, LinearLayout.LayoutParams(-1, -2))
+
+        rowsBox.addView(band, LinearLayout.LayoutParams(-1, -2))
+        rowLines += line
+        return line to TileName(nameView, null)
+    }
+
+    // The carousel's middle tile, kept while the focus is on the round buttons
+    private var carouselIndex = 0
+
+    /**
+     * Carousel: the focused tile full size in the middle, two neighbours on each side, smaller and
+     * fainter, the others out of sight. Only translations, scales and alpha: no new layout or picture.
+     */
+    private fun arrangeCarousel(animate: Boolean = true) {
+        val line = rowLines.firstOrNull() ?: return
+        val focusIndex = line.indexOfChild(currentFocus)
+        if (focusIndex >= 0) carouselIndex = focusIndex
+        carouselIndex = carouselIndex.coerceIn(0, (line.childCount - 1).coerceAtLeast(0))
+        if (line.width == 0) return
+        val tileWidth = Tiles.dp(this, Prefs.CAROUSEL_WIDTH).toFloat()
+        val gap = Tiles.dp(this, CAROUSEL_GAP_DP).toFloat()
+        val centre = line.width / 2f
+        for (i in 0 until line.childCount) {
+            val child = line.getChildAt(i)
+            val steps = Math.abs(i - carouselIndex)
+            var offset = 0f
+            for (k in 1..steps) offset += tileWidth * (carouselScale(k - 1) + carouselScale(k)) / 2 + gap
+            val x = centre + Math.signum((i - carouselIndex).toFloat()) * offset - (child.left + child.width / 2f)
+            val scale = carouselScale(steps)
+            val alpha = CAROUSEL_ALPHAS[steps.coerceAtMost(CAROUSEL_ALPHAS.size - 1)]
+            val z = if (steps == 0) Tiles.dp(this, 10).toFloat() else 0f
+            if (animate) {
+                child.animate().translationX(x).scaleX(scale).scaleY(scale).alpha(alpha).translationZ(z).setDuration(180).start()
+            } else {
+                child.animate().cancel()
+                child.translationX = x; child.scaleX = scale; child.scaleY = scale; child.alpha = alpha; child.translationZ = z
+            }
+        }
+    }
+
+    private fun carouselScale(steps: Int) = CAROUSEL_SCALES[steps.coerceAtMost(CAROUSEL_SCALES.size - 1)]
 
     /** Small round icon button of the first band's title line; its name shows while focused. */
     private fun roundButton(icon: Int, label: String, tag: String, name: TextView, onClick: () -> Unit): View {
@@ -873,6 +983,11 @@ class HomeActivity : Activity() {
         // Box padding and a gap above the rows
         private const val NEWS_MARGIN_DP = 28
         private const val NEWS_TOP_DP = 66
+        private const val NEWS_UNDER_CLOCK_DP = 20
         private const val READ_TV_LISTINGS = "android.permission.READ_TV_LISTINGS"
+        // Carousel: size and opacity by distance from the middle tile (the last ones are out of sight)
+        private const val CAROUSEL_GAP_DP = 22
+        private val CAROUSEL_SCALES = floatArrayOf(1f, 0.55f, 0.44f, 0.44f)
+        private val CAROUSEL_ALPHAS = floatArrayOf(1f, 0.7f, 0.4f, 0f)
     }
 }

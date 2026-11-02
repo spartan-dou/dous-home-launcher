@@ -242,6 +242,7 @@ class SettingsActivity : Activity() {
 
     private fun rowList() {
         val rows = prefs.appRows.orEmpty()
+        add(pick(getString(R.string.presentation_label), array(R.array.presentations), { if (prefs.carousel) 1 else 0 }) { prefs.carousel = it == 1 })
         add(pick(getString(R.string.visible_rows_label), array(R.array.row_counts), { prefs.visibleRows - 1 }) { prefs.visibleRows = it + 1 })
         add(pick(getString(R.string.dock_label), array(R.array.dock_positions), { if (prefs.dockOnTop) 1 else 0 }) { prefs.dockOnTop = it == 1 })
         if (rows.any { it.pinned }) {

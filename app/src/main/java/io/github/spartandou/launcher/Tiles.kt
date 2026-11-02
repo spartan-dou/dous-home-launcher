@@ -26,7 +26,8 @@ object Tiles {
     fun height(width: Int) = width * 9 / 16
 
     /** An empty tile: its picture comes later from [fill], rendered off the main thread. */
-    fun create(context: Context, label: String, onFocus: (Boolean) -> Unit): FrameLayout {
+    /** [zoom] false: the caller moves and sizes the tiles itself (the carousel). */
+    fun create(context: Context, label: String, zoom: Boolean = true, onFocus: (Boolean) -> Unit): FrameLayout {
         val tile = FrameLayout(context)
         tile.isFocusable = true
         tile.isClickable = true
@@ -42,10 +43,12 @@ object Tiles {
         tile.elevation = dp(context, ELEVATION_DP).toFloat()
 
         tile.setOnFocusChangeListener { view, focused ->
-            val scale = if (focused) 1.1f else 1f
-            view.animate().scaleX(scale).scaleY(scale).translationZ(if (focused) dp(context, 10).toFloat() else 0f)
-                .setDuration(120).start()
-            dimSiblings(view)
+            if (zoom) {
+                val scale = if (focused) 1.1f else 1f
+                view.animate().scaleX(scale).scaleY(scale).translationZ(if (focused) dp(context, 10).toFloat() else 0f)
+                    .setDuration(120).start()
+                dimSiblings(view)
+            }
             onFocus(focused)
         }
         return tile

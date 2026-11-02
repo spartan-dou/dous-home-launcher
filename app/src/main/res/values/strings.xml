@@ -85,6 +85,11 @@
         <item>en bas</item>
         <item>en haut</item>
     </string-array>
+    <string name="presentation_label">Présentation</string>
+    <string-array name="presentations">
+        <item>rangées</item>
+        <item>une appli à la fois (carrousel)</item>
+    </string-array>
     <string name="visible_rows_label">Rangées visibles à la fois</string>
     <string-array name="row_counts">
         <item>1</item>

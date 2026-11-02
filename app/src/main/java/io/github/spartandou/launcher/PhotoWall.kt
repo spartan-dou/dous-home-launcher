@@ -63,6 +63,8 @@ class PhotoWall(
     private var media = false
     // The slow zoom of each slide, while it is shown
     private val drifts = HashMap<FrameLayout, Animator>()
+    // Pictures replaced on screen, freed when the fade that covers them ends
+    private val retired = mutableListOf<Bitmap>()
 
     private val next = Runnable { showNext() }
 
@@ -91,6 +93,7 @@ class PhotoWall(
         (slide.getChildAt(0) as ImageView).setImageBitmap(shownBlur)
         shownPhoto?.recycle()
         shownPhoto = null
+        recycleRetired()
     }
 
     /** Called when Android asks for memory back: the photos are dropped, the last one stays on disk. */
@@ -105,6 +108,7 @@ class PhotoWall(
         shownBlur?.recycle()
         shownPhoto = null
         shownBlur = null
+        recycleRetired()
         worker.execute { photos = emptyList(); listKey = "" }
     }
 
@@ -260,8 +264,9 @@ class PhotoWall(
         GlassView.showAll(blur, FADE_MS)
         blur?.let(onPhoto)
 
-        val oldPhoto = shownPhoto
-        val oldBlur = shownBlur
+        // Replaced pictures are freed once a fade ends, even when a newer picture cut that fade short
+        shownPhoto?.takeIf { it !== bitmap }?.let { retired += it }
+        shownBlur?.takeIf { it !== blur }?.let { retired += it }
         shownPhoto = bitmap
         shownBlur = blur
         slide.animate().cancel()
@@ -276,8 +281,7 @@ class PhotoWall(
             val old = slides[front]
             if (old !== slide) { clear(old); stopDrift(old) }
             front = back
-            if (oldPhoto !== bitmap) oldPhoto?.recycle()
-            if (oldBlur !== blur) oldBlur?.recycle()
+            recycleRetired()
         }.start()
         updateCaption(photo)
     }
@@ -301,6 +305,12 @@ class PhotoWall(
         captionDate.visibility = View.GONE
         pin.visibility = View.GONE
         captionBox.alpha = 1f
+    }
+
+    // Everything replaced, except what is shown now (a picture can come back, e.g. the blur on stop)
+    private fun recycleRetired() {
+        retired.forEach { if (it !== shownPhoto && it !== shownBlur) it.recycle() }
+        retired.clear()
     }
 
     private val pin: View get() = (captionBox as android.view.ViewGroup).getChildAt(0)

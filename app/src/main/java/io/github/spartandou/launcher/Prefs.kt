@@ -131,6 +131,11 @@ class Prefs(context: Context) {
         get() = prefs.getBoolean("show_status", true)
         set(value) = prefs.edit().putBoolean("show_status", value).apply()
 
+    /** One row at a time, the focused app large in the middle, its neighbours smaller on each side. */
+    var carousel: Boolean
+        get() = prefs.getBoolean("carousel", false)
+        set(value) = prefs.edit().putBoolean("carousel", value).apply()
+
     /** A very slow zoom on each photo (GPU only: the photo is not decoded again). */
     var drift: Boolean
         get() = prefs.getBoolean("drift", true)
@@ -143,7 +148,7 @@ class Prefs(context: Context) {
     /** Changes whenever the layout changes, so the home screen rebuilds it. */
     val layoutKey: String
         get() = "$dockOnTop|$visibleRows|${prefs.getString("app_rows", "")}|$pinnedOnTop|$clockPosition|$clockSize|$accent|$showNews|" +
-            "$showWeather|$showStatus"
+            "$showWeather|$showStatus|$carousel"
 
     companion object {
         val INTERVALS = intArrayOf(10, 15, 30, 60, 120, 300)
@@ -155,6 +160,8 @@ class Prefs(context: Context) {
         val TILE_WIDTHS = intArrayOf(112, 136, 168, 208)
 
         // Time text size in sp: small, medium, large
+        // Width of the carousel's focused tile, in dp; its neighbours are scaled down from it
+        const val CAROUSEL_WIDTH = 210
         // Compact clock: the date and weather sit beside the time
         val CLOCK_SIZES = intArrayOf(48, 60, 76)
 
