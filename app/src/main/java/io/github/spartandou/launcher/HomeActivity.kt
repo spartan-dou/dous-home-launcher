@@ -28,6 +28,8 @@ class HomeActivity : Activity() {
     private lateinit var prefs: Prefs
     private lateinit var wall: PhotoWall
     private lateinit var status: StatusBar
+    private lateinit var news: NewsPanel
+    private lateinit var newsBox: View
     private lateinit var weather: Weather
     private lateinit var rowsBox: LinearLayout
     private lateinit var dock: LinearLayout
@@ -96,6 +98,10 @@ class HomeActivity : Activity() {
         allApps = findViewById(R.id.all_apps)
         grid = findViewById(R.id.grid)
         status = StatusBar(this, findViewById(R.id.status_box))
+        newsBox = findViewById(R.id.news_box)
+        news = NewsPanel(this, findViewById(R.id.news_box)) { program -> openProgram(program) }
+        // The poster takes the height the rows leave free between them and the top (or bottom)
+        dock.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom -> if (top != oldTop || bottom != oldBottom) fitNews() }
 
         val slides = findViewById<FrameLayout>(R.id.slides)
         findViewById<GlassView>(R.id.all_apps_glass).apply { cornerRadius = 0f; tint = 0x99000000.toInt() }
@@ -136,12 +142,14 @@ class HomeActivity : Activity() {
         setUiHidden(false)
         main.removeCallbacks(tick)
         tick.run()
+        news.start()
     }
 
     override fun onPause() {
         super.onPause()
         main.removeCallbacks(hideUi)
         main.removeCallbacks(tick)
+        news.stop()
     }
 
     override fun onStop() {
@@ -228,10 +236,11 @@ class HomeActivity : Activity() {
                 if (band == windowLast && rowOffset + window.size < shownRows) {
                     rowOffset += 1
                     target = windowLast
-                } else if (band == rowLines.size - 1) {
-                    // Rows read top to bottom on screen whatever the dock position
+                } else if (band == windowLast || band == rowLines.size - 1) {
+                    // Past the last scrolling row: back to the first one, never onto the pinned row
+                    // (rows read top to bottom on screen whatever the dock position)
                     rowOffset = 0
-                    target = 0
+                    target = windowFirst.coerceAtLeast(0)
                 } else {
                     return false
                 }
@@ -328,6 +337,7 @@ class HomeActivity : Activity() {
         val alpha = if (hidden) 0f else 1f
         val duration = if (hidden) 800L else 200L
         dock.animate().alpha(alpha).setDuration(duration).start()
+        newsBox.animate().alpha(alpha).setDuration(duration).start()
         dockScrim.animate().alpha(alpha).setDuration(duration).start()
         if (!hidden) scheduleHide()
     }
@@ -448,14 +458,7 @@ class HomeActivity : Activity() {
             if (focused) focusMedia(program) else main.post { if (currentFocus?.tag !is Long) leaveMedia() }
         }
         tile.tag = program.id
-        tile.setOnClickListener {
-            try {
-                WatchNext.intent(this, program)?.let { startActivity(it) }
-            } catch (e: Exception) {
-                Log.w(TAG, "Cannot open ${program.title}", e)
-                Toast.makeText(this, e.message, Toast.LENGTH_SHORT).show()
-            }
-        }
+        tile.setOnClickListener { openProgram(program) }
         fun show(picture: android.graphics.drawable.Drawable?) {
             Tiles.fill(this, tile, program.title, picture, if (picture == null) getDrawable(R.drawable.ic_play) else null)
             program.progress?.let { p ->
@@ -479,6 +482,16 @@ class HomeActivity : Activity() {
             }
         }
         return tile
+    }
+
+    /** Opens a "continue watching" or "new" entry where its app said. */
+    private fun openProgram(program: Program) {
+        try {
+            WatchNext.intent(this, program)?.let { startActivity(it) }
+        } catch (e: Exception) {
+            Log.w(TAG, "Cannot open ${program.title}", e)
+            Toast.makeText(this, e.message, Toast.LENGTH_SHORT).show()
+        }
     }
 
     // 16:9 crop at the tile size: app stills come in any shape
@@ -523,16 +536,55 @@ class HomeActivity : Activity() {
         wall.resumePhotos()
     }
 
-    /** Reads the "continue watching" entries again (they change as things are watched). */
+    private fun fitNews() {
+        val root = findViewById<View>(android.R.id.content)
+        val margins = Tiles.dp(this, NEWS_MARGIN_DP)
+        val params = newsBox.layoutParams as FrameLayout.LayoutParams
+        val available = if (prefs.dockOnTop) {
+            params.gravity = Gravity.BOTTOM or Gravity.END
+            params.topMargin = 0
+            params.bottomMargin = Tiles.dp(this, 40)
+            root.height - dock.bottom - params.bottomMargin - margins
+        } else {
+            // Right under the status icons, down to the rows
+            params.gravity = Gravity.TOP or Gravity.END
+            params.topMargin = Tiles.dp(this, NEWS_TOP_DP)
+            params.bottomMargin = 0
+            dock.top + dock.paddingTop - params.topMargin - margins
+        }
+        newsBox.layoutParams = params
+        news.fit(available)
+        placeCaption()
+    }
+
+    // The photo's place and date sit left of the poster while it is shown, under the status icons otherwise
+    private fun placeCaption() {
+        val captionBox = findViewById<View>(R.id.caption_box)
+        val params = captionBox.layoutParams as LinearLayout.LayoutParams
+        val newsParams = newsBox.layoutParams as FrameLayout.LayoutParams
+        val infoParams = infoBox.layoutParams as FrameLayout.LayoutParams
+        params.marginEnd = if (news.isShown && !prefs.dockOnTop) {
+            newsParams.marginEnd + newsBox.paddingStart + newsBox.paddingEnd + news.cardWidth + Tiles.dp(this, 20) - infoParams.marginEnd
+        } else 0
+        captionBox.layoutParams = params
+    }
+
+    /** Reads the "continue watching" entries and the "new" panel's again (they change over time). */
     private fun loadPrograms() {
-        if (prefs.appRows.orEmpty().none { it.continueWatching }) return
+        val continueRow = prefs.appRows.orEmpty().any { it.continueWatching }
+        val showNews = prefs.showNews
+        if (!showNews) { news.hide(); placeCaption() }
+        if (!continueRow && !showNews) return
         if (checkSelfPermission(READ_TV_LISTINGS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(READ_TV_LISTINGS), 1)
             return
         }
+        val channels = prefs.newsChannels
         worker.execute {
-            val loaded = WatchNext.load(this, emptyList())
+            val loaded = if (continueRow) WatchNext.load(this, emptyList()) else emptyList()
+            val newItems = if (showNews) WatchNext.news(this, channels) else emptyList()
             main.post {
+                if (showNews) { news.setItems(newItems); placeCaption() }
                 if (loaded == programs) return@post
                 programs = loaded
                 // Keeps only the pictures still in use
@@ -643,6 +695,12 @@ class HomeActivity : Activity() {
             val image = android.widget.ImageView(context).apply { setImageResource(icon); alpha = 0.7f }
             addView(image, FrameLayout.LayoutParams(Tiles.dp(context, 20), Tiles.dp(context, 20), Gravity.CENTER))
             setOnClickListener { onClick() }
+            // Up from the round buttons: the "new" panel when it is shown
+            setOnKeyListener { _, keyCode, event ->
+                if (keyCode == KeyEvent.KEYCODE_DPAD_UP && event.action == KeyEvent.ACTION_DOWN && news.isShown) {
+                    news.view.requestFocus()
+                } else false
+            }
             setOnFocusChangeListener { view, focused ->
                 name.text = if (focused) label else ""
                 image.setColorFilter(if (focused) 0xFF15181E.toInt() else Color.WHITE)
@@ -781,6 +839,9 @@ class HomeActivity : Activity() {
         private const val SETTINGS = "settings"
         private const val NO_FOCUS = ""
         private const val MEDIA_DELAY_MS = 500L
+        // Box padding and a gap above the rows
+        private const val NEWS_MARGIN_DP = 28
+        private const val NEWS_TOP_DP = 66
         private const val READ_TV_LISTINGS = "android.permission.READ_TV_LISTINGS"
     }
 }

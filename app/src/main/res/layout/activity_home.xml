@@ -126,8 +126,19 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- paddingTop: room above the first title line, where a focused round button grows -->
+    <!-- "New" panel: one poster at a time from the apps' channels, filled in code -->
+    <FrameLayout
+        android:id="@+id/news_box"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="66dp"
+        android:layout_marginEnd="48dp"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:padding="6dp" />
 
+    <!-- paddingTop: room above the first title line, where a focused round button grows -->
     <LinearLayout
         android:id="@+id/dock"
         android:layout_width="match_parent"

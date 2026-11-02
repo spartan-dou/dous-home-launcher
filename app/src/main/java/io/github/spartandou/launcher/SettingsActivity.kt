@@ -50,6 +50,7 @@ class SettingsActivity : Activity() {
         R.string.section_weather to ::weatherSection,
         R.string.section_display to ::display,
         R.string.section_rows to ::rows,
+        R.string.section_news to ::newsSection,
         R.string.section_remote to ::remote,
         R.string.section_connection to ::connection,
     )
@@ -368,6 +369,38 @@ class SettingsActivity : Activity() {
         val enabled = android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
             .orEmpty().contains("$packageName/")
         add(hint(getString(if (enabled) R.string.key_service_on else R.string.key_service_off)))
+    }
+
+    /** The "new" panel: on or off, and the channels it takes its posters from. */
+    private fun newsSection() {
+        add(check(getString(R.string.show_news), prefs.showNews) { prefs.showNews = it })
+        add(subheader(getString(R.string.news_channels)))
+        add(hint(getString(R.string.news_channels_hint)))
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        add(box)
+        Thread {
+            val channels = WatchNext.channels(this).values.distinctBy { it.key }
+            main.post {
+                if (isDestroyed || content.indexOfChild(box) < 0) return@post
+                if (channels.isEmpty()) box.addView(hint(getString(R.string.continue_none)))
+                // Until chosen, the "recently added" channels are the ones used
+                val chosen = prefs.newsChannels ?: channels.filter { WatchNext.isRecentlyAdded(it) }.map { it.key }.toSet()
+                channels.map { it to "${appLabel(it.packageName)} · ${it.name}" }
+                    .sortedWith(compareBy(frenchOrder) { it.second })
+                    .forEach { (channel, label) ->
+                        box.addView(check(label, channel.key in chosen) { checked ->
+                            val current = prefs.newsChannels ?: chosen
+                            prefs.newsChannels = if (checked) current + channel.key else current - channel.key
+                        })
+                    }
+            }
+        }.start()
+    }
+
+    private fun appLabel(pkg: String) = try {
+        packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+    } catch (e: Exception) {
+        pkg
     }
 
     private fun connection() {

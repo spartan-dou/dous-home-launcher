@@ -39,6 +39,8 @@ Après 30 s sans toucher la télécommande, les applis s'effacent et seule la ph
 
 Navigation : haut depuis la première rangée atteint « Toutes les applis » et les réglages (petites icônes) ; bas depuis la dernière rangée revient à la première. En haut à droite, une icône ouvre les paramètres de la Shield.
 
+**Nouveautés** : à droite, sous les icônes d'état, une affiche à la fois (fondu toutes les 8 s) tirée des rangées que les applis publient pour l'accueil Android TV (« Récemment ajouté » de Wholphin, « Derniers médias ajoutés » de Jellyfin… au choix dans les réglages). Haut depuis les icônes de l'accueil pour y aller, gauche/droite pour changer, OK pour ouvrir. Sa taille suit la place laissée par les rangées ; trop peu de place et il se masque.
+
 **Mise en page** :
 - applis en bas ou en haut de l'écran ;
 - 1 à 3 rangées d'applis indépendantes, chacune dans son propre bandeau de verre, avec un titre (modifiable, ou aucun) et une taille petite, moyenne ou grande ;

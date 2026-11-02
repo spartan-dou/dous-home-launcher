@@ -73,6 +73,73 @@ object WatchNext {
         return programs.sortedByDescending { it.first }.map { it.second }
     }
 
+    /** A row an app publishes to the Android TV home screen ("Recently added"...). */
+    data class Channel(val key: String, val packageName: String, val name: String)
+
+    private val CHANNELS = Uri.parse("content://android.media.tv/channel")
+    private val PREVIEWS = Uri.parse("content://android.media.tv/preview_program")
+
+    /** The apps' published channels. Keyed by app and name: ids change when an app republishes. Worker thread. */
+    fun channels(context: Context): Map<Long, Channel> {
+        val channels = mutableMapOf<Long, Channel>()
+        try {
+            context.contentResolver.query(CHANNELS, arrayOf("_id", "package_name", "display_name"), null, null, null)?.use { c ->
+                while (c.moveToNext()) {
+                    val pkg = c.getString(1) ?: continue
+                    val name = c.getString(2) ?: continue
+                    channels[c.getLong(0)] = Channel("$pkg|$name", pkg, name)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("WatchNext", "Channels not readable", e)
+        }
+        return channels
+    }
+
+    /** The default choice: the "recently added" kind of channels. */
+    fun isRecentlyAdded(channel: Channel) =
+        Regex("ajout|added|nouveau|new|r[ée]cent", RegexOption.IGNORE_CASE).containsMatchIn(channel.name)
+
+    /**
+     * Programs of the chosen channels, taken in turn from each channel so one app does not fill the
+     * list. [keys] null: the default choice. Worker thread.
+     */
+    fun news(context: Context, keys: Set<String>?): List<Pair<Program, Channel>> {
+        val channels = channels(context).filterValues { if (keys == null) isRecentlyAdded(it) else it.key in keys }
+        if (channels.isEmpty()) return emptyList()
+        val byChannel = linkedMapOf<Long, MutableList<Program>>()
+        try {
+            context.contentResolver.query(PREVIEWS, null, null, null, null)?.use { c ->
+                fun col(name: String) = c.getColumnIndex(name)
+                val cId = col("_id"); val cChannel = col("channel_id"); val cTitle = col("title"); val cPoster = col("poster_art_uri")
+                val cThumb = col("thumbnail_uri"); val cIntent = col("intent_uri"); val cEpisode = col("episode_title"); val cBrowsable = col("browsable")
+                fun text(i: Int) = if (i >= 0 && !c.isNull(i)) c.getString(i)?.ifBlank { null } else null
+                while (c.moveToNext()) {
+                    if (cBrowsable >= 0 && !c.isNull(cBrowsable) && c.getInt(cBrowsable) == 0) continue
+                    val channelId = c.getLong(cChannel)
+                    val channel = channels[channelId] ?: continue
+                    byChannel.getOrPut(channelId) { mutableListOf() } += Program(
+                        id = c.getLong(cId),
+                        packageName = channel.packageName,
+                        title = text(cTitle) ?: continue,
+                        subtitle = text(cEpisode),
+                        image = text(cPoster) ?: text(cThumb),
+                        background = text(cPoster) ?: text(cThumb),
+                        intentUri = text(cIntent),
+                        progress = null,
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("WatchNext", "Previews not readable", e)
+        }
+        val lists = byChannel.map { (id, list) -> channels.getValue(id) to list }
+        val mixed = mutableListOf<Pair<Program, Channel>>()
+        val longest = lists.maxOfOrNull { it.second.size } ?: 0
+        for (i in 0 until longest) lists.forEach { (channel, list) -> list.getOrNull(i)?.let { mixed += it to channel } }
+        return mixed
+    }
+
     /** Packages that publish entries, for choosing the sources. Worker thread. */
     fun publishers(context: Context): List<String> = load(context, emptyList()).map { it.packageName }.distinct()
 

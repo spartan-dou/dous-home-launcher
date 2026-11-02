@@ -92,6 +92,16 @@ class Prefs(context: Context) {
         get() = prefs.getString("netflix_key_app", "")!!
         set(value) = prefs.edit().putString("netflix_key_app", value).apply()
 
+    /** The "new" panel on the right: one poster at a time from the chosen channels. */
+    var showNews: Boolean
+        get() = prefs.getBoolean("show_news", true)
+        set(value) = prefs.edit().putBoolean("show_news", value).apply()
+
+    /** Chosen channels ("package|name"); null until chosen: the "recently added" ones. */
+    var newsChannels: Set<String>?
+        get() = prefs.getStringSet("news_channels", null)
+        set(value) = prefs.edit().putStringSet("news_channels", value).apply()
+
     var clockSize: Int
         get() = prefs.getInt("clock_size", 1).coerceIn(CLOCK_SIZES.indices)
         set(value) = prefs.edit().putInt("clock_size", value).apply()
@@ -127,7 +137,7 @@ class Prefs(context: Context) {
 
     /** Changes whenever the layout changes, so the home screen rebuilds it. */
     val layoutKey: String
-        get() = "$dockOnTop|$visibleRows|${prefs.getString("app_rows", "")}|$pinnedOnTop|$clockPosition|$clockSize|$accent|" +
+        get() = "$dockOnTop|$visibleRows|${prefs.getString("app_rows", "")}|$pinnedOnTop|$clockPosition|$clockSize|$accent|$showNews|" +
             "$showWeather|$showStatus"
 
     companion object {

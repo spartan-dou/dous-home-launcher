@@ -132,6 +132,13 @@
         <item>en bas</item>
     </string-array>
 
+    <!-- "New" panel -->
+    <string name="section_news">Nouveautés</string>
+    <string name="show_news">Afficher les nouveautés à droite (une affiche à la fois)</string>
+    <string name="news_channels">Rangées des applis</string>
+    <string name="news_channels_hint">Les rangées que vos applis proposent à l\'accueil Android TV. Haut depuis les icônes de l\'accueil pour aller sur l\'affiche : gauche/droite pour changer, OK pour l\'ouvrir.</string>
+    <string name="news_kicker">Nouveau · %1$s</string>
+
     <!-- Remote -->
     <string name="section_remote">Télécommande</string>
     <string name="netflix_key">Touche Netflix</string>
