@@ -88,3 +88,29 @@ class FocusFrame(private val radius: Float, strokeWidth: Float) : Drawable() {
     @Deprecated("Deprecated in Java")
     override fun getOpacity() = PixelFormat.TRANSLUCENT
 }
+
+/** Round button background: dark glass at rest, filled with the [Accent] colour when focused. */
+class AccentDisc : Drawable() {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var focused = false
+
+    override fun draw(canvas: Canvas) {
+        paint.color = if (focused) Accent.color else 0x59000000
+        val r = minOf(bounds.width(), bounds.height()) / 2f
+        canvas.drawCircle(bounds.exactCenterX(), bounds.exactCenterY(), r, paint)
+    }
+
+    override fun isStateful() = true
+
+    override fun onStateChange(state: IntArray): Boolean {
+        val now = android.R.attr.state_focused in state
+        if (now == focused) return false
+        focused = now
+        return true
+    }
+
+    override fun setAlpha(alpha: Int) {}
+    override fun setColorFilter(colorFilter: ColorFilter?) {}
+    @Deprecated("Deprecated in Java")
+    override fun getOpacity() = PixelFormat.TRANSLUCENT
+}

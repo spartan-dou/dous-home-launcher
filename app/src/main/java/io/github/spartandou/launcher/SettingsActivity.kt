@@ -11,10 +11,11 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.text.InputType
+import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
-import android.widget.Button
+import android.view.ViewGroup
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.GridLayout
@@ -27,7 +28,8 @@ import com.google.zxing.qrcode.QRCodeWriter
 
 /**
  * Launcher settings, laid out like the Android TV ones: sections on the left, the focused one on
- * the right. Plain framework views (no AndroidX). Immich is connected from a phone (QR code).
+ * the right; a value is picked from a list. Plain framework views (no AndroidX). Immich is
+ * connected from a phone (QR code).
  */
 class SettingsActivity : Activity() {
     private lateinit var prefs: Prefs
@@ -37,13 +39,17 @@ class SettingsActivity : Activity() {
     private var setup: SetupServer? = null
     private var setupUrl: String? = null
     private var section = -1
+    // Row being edited in the "Rows" section, -1 for the list of rows
+    private var editedRow = -1
+    private var apps: List<App>? = null
+    private var rendering = false
 
     private val sections = listOf(
         R.string.section_photos to ::photos,
         R.string.section_albums to ::albums,
         R.string.section_weather to ::weatherSection,
         R.string.section_display to ::display,
-        R.string.section_layout to ::layout,
+        R.string.section_rows to ::rows,
         R.string.section_connection to ::connection,
     )
 
@@ -65,7 +71,8 @@ class SettingsActivity : Activity() {
         })
         val items = sections.mapIndexed { i, (label, _) ->
             menuItem(getString(label)).also { item ->
-                item.setOnFocusChangeListener { _, focused -> if (focused) show(i) }
+                // Not while a section is rebuilt: removing the focused line moves the focus to the menu
+                item.setOnFocusChangeListener { _, focused -> if (focused && !rendering) show(i) }
                 // OK on a section goes into it
                 item.setOnClickListener { content.requestFocus() }
                 menu.addView(item)
@@ -73,15 +80,26 @@ class SettingsActivity : Activity() {
         }
         root.addView(menu, LinearLayout.LayoutParams(dp(300), -1))
 
-        content = LinearLayout(this).apply {
+        // Up or down past the first or last line stays put instead of jumping into the menu
+        // (which would switch sections); only left goes back to the menu
+        content = object : LinearLayout(this) {
+            override fun focusSearch(focused: View?, direction: Int): View? {
+                val next = super.focusSearch(focused, direction)
+                val vertical = direction == View.FOCUS_UP || direction == View.FOCUS_DOWN
+                return if (vertical && focused != null && next != null && !isInside(next, this)) focused else next
+            }
+        }.apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(48), dp(40), dp(56), dp(40))
         }
-        contentScroll = ScrollView(this).apply { addView(content); isFillViewport = true }
+        // Not focusable itself: right from the menu lands on the first line, not on the scroll area
+        contentScroll = ScrollView(this).apply { addView(content); isFillViewport = true; isFocusable = false }
         root.addView(contentScroll, LinearLayout.LayoutParams(0, -1, 1f))
         setContentView(root)
 
         startSetup()
+        // Labels of the installed apps, for the rows section
+        Thread { val loaded = Apps.load(this); main.post { apps = loaded } }.start()
         // Not connected yet: open on the connection section
         val start = if (prefs.apiKey.isBlank()) sections.lastIndex else 0
         items[start].requestFocus()
@@ -93,31 +111,66 @@ class SettingsActivity : Activity() {
         super.onDestroy()
     }
 
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        // Back from a row's page goes to the list of rows, not out of the settings
+        if (section == ROWS && editedRow >= 0) {
+            editedRow = -1
+            refresh(focus = 1)
+        } else {
+            super.onBackPressed()
+        }
+    }
+
     private fun show(i: Int) {
         if (i == section) return
         section = i
-        content.removeAllViews()
-        content.addView(text(getString(sections[i].first), 30f).apply {
-            typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
-            setPadding(0, 0, 0, dp(16))
-        })
-        sections[i].second()
+        editedRow = -1
+        render()
         contentScroll.scrollTo(0, 0)
     }
 
-    private fun refresh() {
-        val current = section
-        section = -1
-        show(current)
+    private fun render() {
+        rendering = true
+        try {
+            content.removeAllViews()
+            content.addView(text(getString(sections[section].first), 30f).apply {
+                typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+                setPadding(0, 0, 0, dp(16))
+            })
+            sections[section].second()
+        } finally {
+            rendering = false
+        }
+    }
+
+    /** Rebuilds the section; the focus stays on the same line (or [focus], an index in the content). */
+    private fun refresh(focus: Int? = null) {
+        val focused = currentFocus
+        val index = focus ?: (0 until content.childCount).firstOrNull { content.getChildAt(it).let { v -> v === focused || (v is ViewGroup && focused != null && isInside(focused, v)) } }
+        val scroll = contentScroll.scrollY
+        render()
+        // A new page (explicit focus) starts at the top, the same page keeps its scroll
+        contentScroll.post { contentScroll.scrollTo(0, if (focus != null) 0 else scroll) }
+        index?.let { i -> (content.getChildAt(i.coerceAtMost(content.childCount - 1)))?.requestFocus() }
+    }
+
+    private fun isInside(view: View, group: ViewGroup): Boolean {
+        var parent = view.parent
+        while (parent != null) {
+            if (parent === group) return true
+            parent = parent.parent
+        }
+        return false
     }
 
     // --- Sections ---
 
     private fun photos() {
         add(check(getString(R.string.memories), prefs.memories) { prefs.memories = it })
-        add(choice(getString(R.string.interval_label), { intervalName(prefs.intervalSeconds) }) {
-            val all = Prefs.INTERVALS
-            prefs.intervalSeconds = all[(all.indexOf(prefs.intervalSeconds) + 1) % all.size]
+        val intervals = Prefs.INTERVALS.map { if (it < 60) "$it s" else "${it / 60} min" }.toTypedArray()
+        add(pick(getString(R.string.interval_label), intervals, { Prefs.INTERVALS.indexOf(prefs.intervalSeconds) }) {
+            prefs.intervalSeconds = Prefs.INTERVALS[it]
         })
         add(check(getString(R.string.show_place), prefs.showPlace) { prefs.showPlace = it })
         add(check(getString(R.string.show_date), prefs.showDate) { prefs.showDate = it })
@@ -147,7 +200,7 @@ class SettingsActivity : Activity() {
                         }.apply {
                             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
                             maxLines = 1
-                            ellipsize = android.text.TextUtils.TruncateAt.END
+                            ellipsize = TextUtils.TruncateAt.END
                         }, GridLayout.LayoutParams().apply {
                             width = 0
                             columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
@@ -164,31 +217,87 @@ class SettingsActivity : Activity() {
         add(check(getString(R.string.show_weather), prefs.showWeather) { prefs.showWeather = it })
         add(choice(getString(R.string.weather_city), {
             prefs.weatherCity.ifBlank { Weather(this).placeName?.let { "$it (${getString(R.string.weather_auto)})" } ?: getString(R.string.weather_auto) }
-        }, onClick = false) { editCity() })
+        }) { editCity() })
         add(hint(getString(R.string.weather_city_help)))
     }
 
     private fun display() {
         add(check(getString(R.string.auto_hide), prefs.autoHide) { prefs.autoHide = it })
         add(check(getString(R.string.show_status), prefs.showStatus) { prefs.showStatus = it })
-        add(cycle(getString(R.string.clock_label), R.array.clock_positions, { prefs.clockPosition }) { prefs.clockPosition = it })
-        add(cycle(getString(R.string.accent_label), R.array.accents, { prefs.accent }) { prefs.accent = it })
+        add(pick(getString(R.string.clock_label), array(R.array.clock_positions), { prefs.clockPosition }) { prefs.clockPosition = it })
+        add(pick(getString(R.string.clock_size_label), array(R.array.clock_sizes), { prefs.clockSize }) { prefs.clockSize = it })
+        add(pick(getString(R.string.accent_label), array(R.array.accents), { prefs.accent }) { prefs.accent = it })
     }
 
-    private fun layout() {
-        add(cycle(getString(R.string.dock_label), R.array.dock_positions, { if (prefs.dockOnTop) 1 else 0 }) { prefs.dockOnTop = it == 1 })
-        add(cycle(getString(R.string.row_count_label), R.array.row_counts, { prefs.rowCount - 1 }) { prefs.rowCount = it + 1; refresh() })
-        for (row in 0 until prefs.rowCount) {
-            add(subheader(getString(R.string.row_n, row + 1)))
-            add(choice(getString(R.string.row_title), { prefs.rowTitle(row).ifEmpty { getString(R.string.no_title) } }, onClick = false) {
-                editText(getString(R.string.row_title), prefs.rowTitle(row), getString(R.string.row_title_hint)) {
-                    prefs.setRowTitle(row, it)
-                    refresh()
-                }
-            })
-            add(cycle(getString(R.string.row_size_label), R.array.tile_sizes, { prefs.rowSize(row) }) { prefs.setRowSize(row, it) })
+    private fun rows() = if (editedRow >= 0) rowPage(editedRow) else rowList()
+
+    private fun rowList() {
+        val rows = prefs.appRows.orEmpty()
+        add(pick(getString(R.string.visible_rows_label), array(R.array.row_counts), { prefs.visibleRows - 1 }) { prefs.visibleRows = it + 1 })
+        add(pick(getString(R.string.dock_label), array(R.array.dock_positions), { if (prefs.dockOnTop) 1 else 0 }) { prefs.dockOnTop = it == 1 })
+        add(subheader(getString(R.string.your_rows)))
+        val sizes = array(R.array.tile_sizes)
+        rows.forEachIndexed { i, row ->
+            val installed = apps?.let { list -> row.apps.count { pkg -> list.any { it.packageName == pkg } } } ?: row.apps.size
+            val summary = resources.getQuantityString(R.plurals.app_count, installed, installed) + " · " + sizes[row.size]
+            add(choice(rowName(row, i), { summary }) { editedRow = i; refresh(focus = 1) })
         }
-        add(hint(getString(R.string.layout_hint)))
+        add(action(getString(R.string.add_row)) {
+            val updated = rows + AppRow(getString(R.string.row_n, rows.size + 1), 1, mutableListOf())
+            prefs.appRows = updated
+            editedRow = updated.lastIndex
+            refresh(focus = 1)
+        })
+        add(hint(getString(R.string.rows_hint)))
+    }
+
+    private fun rowPage(r: Int) {
+        val rows = prefs.appRows.orEmpty().toMutableList()
+        if (r !in rows.indices) { editedRow = -1; rowList(); return }
+        val row = rows[r]
+        fun save() { prefs.appRows = rows }
+
+        add(action(getString(R.string.back_to_rows)) { editedRow = -1; refresh(focus = 1) })
+        add(subheader(rowName(row, r)))
+        add(choice(getString(R.string.row_title), { row.title.ifEmpty { getString(R.string.no_title) } }) {
+            editText(getString(R.string.row_title), row.title, getString(R.string.row_title_hint)) { row.title = it; save(); refresh() }
+        })
+        add(pick(getString(R.string.row_size_label), array(R.array.tile_sizes), { row.size }) { row.size = it; save() })
+
+        add(subheader(getString(R.string.row_apps)))
+        val labels = apps.orEmpty().associate { it.packageName to it.label }
+        // Apps uninstalled since they were put on the row are left out (home skips them too)
+        row.apps.toList().forEachIndexed { i, pkg ->
+            if (apps != null && pkg !in labels) return@forEachIndexed
+            add(choice(labels[pkg] ?: pkg, { "" }) {
+                val actions = mutableListOf<Pair<String, () -> Unit>>()
+                if (i > 0) actions += getString(R.string.move_left) to { row.apps.add(i - 1, row.apps.removeAt(i)) }
+                if (i < row.apps.size - 1) actions += getString(R.string.move_right) to { row.apps.add(i + 1, row.apps.removeAt(i)) }
+                rows.indices.filter { it != r }.forEach { other ->
+                    actions += getString(R.string.move_to_row, rowName(rows[other], other)) to { row.apps.removeAt(i); rows[other].apps += pkg }
+                }
+                actions += getString(R.string.remove) to { row.apps.removeAt(i) }
+                menu(labels[pkg] ?: pkg, actions) { save(); refresh() }
+            })
+        }
+        add(action(getString(R.string.add_app)) {
+            // Apps on another row move here; the ones already on this row are not offered
+            val candidates = apps.orEmpty().filter { it.packageName !in row.apps && it.packageName != packageName }
+            menu(getString(R.string.add_app), candidates.map { app ->
+                app.label to { rows.forEach { it.apps.remove(app.packageName) }; row.apps += app.packageName }
+            }) { save(); refresh() }
+        })
+
+        add(subheader(getString(R.string.row_order)))
+        if (r > 0) add(action(getString(R.string.row_up)) { rows.add(r - 1, rows.removeAt(r)); save(); editedRow = r - 1; refresh() })
+        if (r < rows.size - 1) add(action(getString(R.string.row_down)) { rows.add(r + 1, rows.removeAt(r)); save(); editedRow = r + 1; refresh() })
+        add(action(getString(R.string.delete_row)) {
+            AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setMessage(getString(R.string.delete_row_confirm, rowName(row, r)))
+                .setPositiveButton(R.string.delete) { _, _ -> rows.removeAt(r); save(); editedRow = -1; refresh(focus = 1) }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        })
     }
 
     private fun connection() {
@@ -210,7 +319,7 @@ class SettingsActivity : Activity() {
     // --- Actions ---
 
     private fun startSetup() {
-        val server = SetupServer(prefs) { main.post { if (section == sections.lastIndex || section == 1) refresh() } }
+        val server = SetupServer(prefs) { main.post { if (section == sections.lastIndex || section == ALBUMS) refresh() } }
         setupUrl = try { server.start() } catch (e: Exception) { null }
         if (setupUrl != null) setup = server
     }
@@ -251,11 +360,20 @@ class SettingsActivity : Activity() {
             .show()
     }
 
+    private fun menu(title: String, actions: List<Pair<String, () -> Unit>>, after: () -> Unit) {
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle(title)
+            .setItems(actions.map { it.first }.toTypedArray()) { _, which -> actions[which].second(); after() }
+            .show()
+    }
+
+    private fun rowName(row: AppRow, index: Int) = row.title.ifEmpty { getString(R.string.row_n, index + 1) }
+
     // --- Views ---
 
     private fun add(view: View) = content.addView(view)
 
-    private fun intervalName(s: Int) = if (s < 60) "$s s" else "${s / 60} min"
+    private fun array(id: Int): Array<String> = resources.getStringArray(id)
 
     // Black on white with a quiet zone, the most readable for phone cameras
     private fun qrBitmap(content: String, size: Int): Bitmap {
@@ -280,8 +398,8 @@ class SettingsActivity : Activity() {
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) }
     }
 
-    /** A row with the setting's name on the left and its value on the right, like Android TV. */
-    private fun choice(label: String, value: () -> String, onClick: Boolean = true, action: () -> Unit): View {
+    /** A line with the setting's name on the left and its value on the right, like Android TV. */
+    private fun choice(label: String, value: () -> String, onClick: (TextView) -> Unit): View {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -294,17 +412,25 @@ class SettingsActivity : Activity() {
         row.addView(text(label, 17f), LinearLayout.LayoutParams(0, -2, 1f))
         val valueView = text(value(), 16f).apply { alpha = 0.75f }
         row.addView(valueView)
-        row.setOnClickListener {
-            action()
-            if (onClick) valueView.text = value()
-        }
+        row.setOnClickListener { onClick(valueView) }
         return row
     }
 
-    private fun cycle(label: String, choices: Int, get: () -> Int, set: (Int) -> Unit): View {
-        val names = resources.getStringArray(choices)
-        return choice(label, { names[get().coerceIn(names.indices)] }) { set((get() + 1) % names.size) }
-    }
+    /** OK opens the list of all the values, the current one ticked; the line updates in place. */
+    private fun pick(label: String, names: Array<String>, get: () -> Int, set: (Int) -> Unit): View =
+        choice(label, { names[get().coerceIn(names.indices)] }) { valueView ->
+            AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle(label)
+                .setSingleChoiceItems(names, get().coerceIn(names.indices)) { dialog, which ->
+                    set(which)
+                    valueView.text = names[which]
+                    dialog.dismiss()
+                }
+                .show()
+        }
+
+    /** A line that does something (no value), e.g. "Add a row". */
+    private fun action(label: String, onClick: () -> Unit): View = choice(label, { "" }) { onClick() }
 
     private fun check(label: String, value: Boolean, onChange: (Boolean) -> Unit) = CheckBox(this).apply {
         text = label
@@ -320,7 +446,7 @@ class SettingsActivity : Activity() {
     private fun subheader(value: String) = text(value.uppercase(), 13f).apply {
         alpha = 0.6f
         letterSpacing = 0.08f
-        setPadding(0, dp(20), 0, 0)
+        setPadding(0, dp(24), 0, 0)
     }
 
     private fun hint(value: String) = text(value, 14f).apply { alpha = 0.6f; setPadding(0, dp(16), 0, 0) }
@@ -332,4 +458,9 @@ class SettingsActivity : Activity() {
     }
 
     private fun dp(value: Int) = Tiles.dp(this, value)
+
+    companion object {
+        private const val ALBUMS = 1
+        private const val ROWS = 4
+    }
 }

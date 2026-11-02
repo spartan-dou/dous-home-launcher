@@ -14,11 +14,10 @@
     <!-- App menus -->
     <string name="move_left">Déplacer vers la gauche</string>
     <string name="move_right">Déplacer vers la droite</string>
-    <string name="move_up">Rangée du dessus</string>
-    <string name="move_down">Rangée du dessous</string>
     <string name="remove">Retirer de l\'accueil</string>
     <string name="add_home">Ajouter à l\'accueil</string>
-    <string name="add_to_row">Mettre sur la rangée %1$d</string>
+    <string name="add_to_row">Mettre dans « %1$s »</string>
+    <string name="move_to_row">Déplacer vers « %1$s »</string>
     <string name="added">%1$s ajouté à l\'accueil</string>
     <string name="removed">%1$s retiré de l\'accueil</string>
 
@@ -27,7 +26,6 @@
     <string name="section_albums">Albums</string>
     <string name="section_weather">Météo</string>
     <string name="section_display">Affichage</string>
-    <string name="section_layout">Mise en page</string>
     <string name="section_connection">Connexion Immich</string>
 
     <!-- Photos -->
@@ -71,29 +69,53 @@
         <item>automatique (couleur de la photo)</item>
     </string-array>
 
-    <!-- Layout -->
+    <string name="clock_size_label">Taille de l\'horloge</string>
+    <string-array name="clock_sizes">
+        <item>petite</item>
+        <item>moyenne</item>
+        <item>grande</item>
+    </string-array>
+
+    <!-- Rows -->
+    <string name="section_rows">Rangées</string>
     <string name="dock_label">Applis</string>
     <string-array name="dock_positions">
         <item>en bas</item>
         <item>en haut</item>
     </string-array>
-    <string name="row_count_label">Nombre de rangées</string>
+    <string name="visible_rows_label">Rangées visibles à la fois</string>
     <string-array name="row_counts">
         <item>1</item>
         <item>2</item>
         <item>3</item>
     </string-array>
+    <string name="your_rows">Vos rangées</string>
+    <plurals name="app_count">
+        <item quantity="one">%1$d appli</item>
+        <item quantity="other">%1$d applis</item>
+    </plurals>
+    <string name="add_row">+ Ajouter une rangée</string>
+    <string name="rows_hint">Autant de rangées que vous voulez : celles qui ne tiennent pas à l\'écran apparaissent en allant plus haut ou plus bas. Un appui long sur une appli de l\'accueil permet aussi de la déplacer.</string>
+    <string name="back_to_rows">← Toutes les rangées</string>
     <string name="row_n">Rangée %1$d</string>
     <string name="row_title">Titre</string>
     <string name="row_title_hint">Vide : pas de titre</string>
     <string name="no_title">aucun</string>
-    <string name="row_size_label">Taille</string>
+    <string name="row_size_label">Taille des vignettes</string>
     <string-array name="tile_sizes">
+        <item>très petite</item>
         <item>petite</item>
         <item>moyenne</item>
         <item>grande</item>
     </string-array>
-    <string name="layout_hint">Pour choisir les applis d\'une rangée : appui long sur une appli, à l\'accueil ou dans « Toutes les applis ».</string>
+    <string name="row_apps">Applis de la rangée</string>
+    <string name="add_app">+ Ajouter une appli</string>
+    <string name="row_order">Rangée</string>
+    <string name="row_up">Monter la rangée</string>
+    <string name="row_down">Descendre la rangée</string>
+    <string name="delete_row">Supprimer la rangée</string>
+    <string name="delete_row_confirm">Supprimer « %1$s » ? Ses applis restent installées et dans « Toutes les applis ».</string>
+    <string name="delete">Supprimer</string>
 
     <!-- Connection -->
     <string name="scan_qr_url">Scannez avec le téléphone, ou ouvrez\n%1$s</string>

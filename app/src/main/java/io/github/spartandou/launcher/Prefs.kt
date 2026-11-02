@@ -2,6 +2,8 @@ package io.github.spartandou.launcher
 
 import android.content.Context
 import android.content.SharedPreferences
+import org.json.JSONArray
+import org.json.JSONObject
 
 class Prefs(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("launcher", Context.MODE_PRIVATE)
@@ -43,44 +45,46 @@ class Prefs(context: Context) {
         set(value) = prefs.edit().putBoolean("auto_hide", value).apply()
 
     /**
-     * Apps of the home rows, each an ordered list of package names (a row may be empty); null until
-     * set (first start picks some). Always read through [homeRows], which fits it to [rowCount].
+     * The app rows, as many as wanted, in order; null until set (first start picks some apps).
+     * Stored as JSON. The first version kept up to three rows in separate keys: read once from them.
      */
-    var rows: List<List<String>>?
-        get() = prefs.getString("rows", null)?.split(';')?.map { row -> row.split(',').filter { it.isNotEmpty() } }
-        set(value) = prefs.edit().putString("rows", value?.joinToString(";") { it.joinToString(",") }).apply()
-
-    /** Exactly [rowCount] rows: the apps of rows beyond it join the last one. */
-    val homeRows: List<List<String>>
+    var appRows: List<AppRow>?
         get() {
-            val stored = rows.orEmpty()
-            val count = rowCount
-            return List(count) { i ->
-                if (i < count - 1) stored.getOrElse(i) { emptyList() } else stored.drop(i).flatten()
-            }
+            val json = prefs.getString("app_rows", null) ?: return legacyRows()
+            val array = JSONArray(json)
+            return (0 until array.length()).map { AppRow.fromJson(array.getJSONObject(it)) }
         }
+        set(value) = prefs.edit().putString("app_rows", value?.let { rows -> JSONArray().apply { rows.forEach { put(it.toJson()) } }.toString() }).apply()
+
+    private fun legacyRows(): List<AppRow>? {
+        val stored = prefs.getString("rows", null) ?: return null
+        val legacyTitles = arrayOf("Favoris", "Rangée 2", "Rangée 3")
+        return stored.split(';').mapIndexed { i, row ->
+            AppRow(
+                prefs.getString("row_title_$i", null) ?: legacyTitles.getOrElse(i) { "Rangée ${i + 1}" },
+                // Sizes were small/medium/large: "extra small" now comes first
+                prefs.getInt("row_size_$i", if (i == 0) 1 else 0) + 1,
+                row.split(',').filter { it.isNotEmpty() }.toMutableList(),
+            )
+        }
+    }
 
     val favourites: Set<String>
-        get() = rows.orEmpty().flatten().toSet()
+        get() = appRows.orEmpty().flatMap { it.apps }.toSet()
 
     // Layout choices, all applied when the home screen comes back
     var dockOnTop: Boolean
         get() = prefs.getBoolean("dock_top", false)
         set(value) = prefs.edit().putBoolean("dock_top", value).apply()
 
-    var rowCount: Int
-        get() = prefs.getInt("row_count", 1).coerceIn(1, MAX_ROWS)
+    /** How many rows show at once; the others are reached by moving up or down past them. */
+    var visibleRows: Int
+        get() = prefs.getInt("row_count", 1).coerceIn(1, MAX_VISIBLE_ROWS)
         set(value) = prefs.edit().putInt("row_count", value).apply()
 
-    /** Size of each row: 0 small, 1 medium, 2 large. */
-    fun rowSize(row: Int): Int = prefs.getInt("row_size_$row", if (row == 0) 1 else 0).coerceIn(TILE_WIDTHS.indices)
-
-    fun setRowSize(row: Int, size: Int) = prefs.edit().putInt("row_size_$row", size).apply()
-
-    /** Title shown above each row's band; empty hides it. */
-    fun rowTitle(row: Int): String = prefs.getString("row_title_$row", null) ?: DEFAULT_TITLES[row]
-
-    fun setRowTitle(row: Int, title: String) = prefs.edit().putString("row_title_$row", title.trim()).apply()
+    var clockSize: Int
+        get() = prefs.getInt("clock_size", 1).coerceIn(CLOCK_SIZES.indices)
+        set(value) = prefs.edit().putInt("clock_size", value).apply()
 
     var clockPosition: Int
         get() = prefs.getInt("clock_position", CLOCK_LEFT)
@@ -113,19 +117,20 @@ class Prefs(context: Context) {
 
     /** Changes whenever the layout changes, so the home screen rebuilds it. */
     val layoutKey: String
-        get() = "$dockOnTop|$rowCount|${(0 until MAX_ROWS).joinToString { "${rowSize(it)}:${rowTitle(it)}" }}|$clockPosition|$accent|" +
+        get() = "$dockOnTop|$visibleRows|${prefs.getString("app_rows", "")}|$clockPosition|$clockSize|$accent|" +
             "$showWeather|$showStatus"
 
     companion object {
         val INTERVALS = intArrayOf(10, 15, 30, 60, 120, 300)
-        const val MAX_ROWS = 3
-        // Right after the fixed colours, so the settings button cycles through it too
+        const val MAX_VISIBLE_ROWS = 3
+        // Right after the fixed colours in the list of choices
         const val ACCENT_AUTO = 6
 
-        // Small, medium, large, in dp (16:9 banners)
-        val TILE_WIDTHS = intArrayOf(136, 168, 208)
+        // Extra small, small, medium, large, in dp (16:9 banners)
+        val TILE_WIDTHS = intArrayOf(112, 136, 168, 208)
 
-        val DEFAULT_TITLES = arrayOf("Favoris", "Rangée 2", "Rangée 3")
+        // Time text size in sp: small, medium, large
+        val CLOCK_SIZES = intArrayOf(56, 76, 96)
 
         const val CLOCK_LEFT = 0
         const val CLOCK_RIGHT = 1
@@ -135,5 +140,21 @@ class Prefs(context: Context) {
         // White, ice blue, lavender, pink, amber, mint: soft tones that stay readable on any photo
         val ACCENTS = intArrayOf(0xFFFFFFFF.toInt(), 0xFF8AB4F8.toInt(), 0xFFB39DDB.toInt(),
             0xFFF48FB1.toInt(), 0xFFFFCA80.toInt(), 0xFF80CBC4.toInt())
+    }
+}
+
+/** One row of apps on the home screen: its title (empty: none), tile size and apps in order. */
+data class AppRow(var title: String, var size: Int, val apps: MutableList<String>) {
+    fun toJson(): JSONObject = JSONObject().put("title", title).put("size", size).put("apps", JSONArray(apps))
+
+    companion object {
+        fun fromJson(o: JSONObject): AppRow {
+            val apps = o.optJSONArray("apps")
+            return AppRow(
+                o.optString("title"),
+                o.optInt("size", 2).coerceIn(Prefs.TILE_WIDTHS.indices),
+                (0 until (apps?.length() ?: 0)).map { apps!!.getString(it) }.toMutableList(),
+            )
+        }
     }
 }
