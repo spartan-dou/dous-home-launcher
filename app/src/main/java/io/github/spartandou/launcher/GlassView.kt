@@ -73,8 +73,9 @@ class GlassView @JvmOverloads constructor(context: Context, attrs: AttributeSet?
         canvas.save()
         canvas.clipPath(clip)
         getLocationInWindow(location)
-        previous?.let { drawAligned(canvas, it, 255) }
-        current?.let { drawAligned(canvas, it, (mix * 255).toInt()) }
+        // The wall recycles a blurred copy once replaced: never draw one that is gone
+        previous?.takeIf { !it.isRecycled }?.let { drawAligned(canvas, it, 255) }
+        current?.takeIf { !it.isRecycled }?.let { drawAligned(canvas, it, (mix * 255).toInt()) }
         canvas.drawRect(bounds, tintPaint)
         canvas.drawRect(bounds, sheenPaint)
         canvas.restore()

@@ -47,6 +47,9 @@ class PhotoWall(
     private var listDay = ""
 
     private var front = 0
+    // What the front slide and the glass show now, recycled once replaced
+    private var shownPhoto: Bitmap? = null
+    private var shownBlur: Bitmap? = null
     private var started = false
     private var busy = false
 
@@ -54,24 +57,46 @@ class PhotoWall(
 
     fun start() {
         started = true
-        if (photoView(front).drawable == null) showLastPhoto()
+        // Back from another app: the last photo comes back from disk over its blurred copy
+        val restoring = photoView(front).drawable == null && lastPhotoFile.exists()
+        if (restoring) showLastPhoto()
         main.removeCallbacks(next)
-        main.postDelayed(next, if (photoView(front).drawable == null) 0 else prefs.intervalSeconds * 1000L)
+        main.postDelayed(next, if (photoView(front).drawable == null && !restoring) 0 else prefs.intervalSeconds * 1000L)
     }
 
+    /**
+     * Hidden behind another app: the full-size photo (~6 MB of graphics memory) is freed, only its
+     * small blurred copy stays on screen for an instant, soft return.
+     */
     fun stop() {
         started = false
         main.removeCallbacks(next)
+        val slide = slides[front]
+        slide.animate().cancel()
+        slide.alpha = 1f
+        clear(slides[1 - front])
+        photoView(front).setImageDrawable(null)
+        (slide.getChildAt(0) as ImageView).setImageBitmap(shownBlur)
+        shownPhoto?.recycle()
+        shownPhoto = null
     }
 
     /** Called when Android asks for memory back: the photos are dropped, the last one stays on disk. */
     fun release() {
+        glass.forEach { it.setBlur(null, 0) }
         slides.forEach { slide ->
             slide.animate().cancel()
-            (0 until slide.childCount).forEach { (slide.getChildAt(it) as ImageView).setImageDrawable(null) }
+            clear(slide)
         }
+        shownPhoto?.recycle()
+        shownBlur?.recycle()
+        shownPhoto = null
+        shownBlur = null
         worker.execute { photos = emptyList(); listKey = "" }
     }
+
+    private fun clear(slide: FrameLayout) =
+        (0 until slide.childCount).forEach { (slide.getChildAt(it) as ImageView).setImageDrawable(null) }
 
     // Instant picture on boot or after a release, before anything is downloaded
     private fun showLastPhoto() {
@@ -186,16 +211,23 @@ class PhotoWall(
         (slide.getChildAt(0) as ImageView).setImageBitmap(if (portrait) blur else null)
         glass.forEach { it.setBlur(blur, FADE_MS) }
 
+        val oldPhoto = shownPhoto
+        val oldBlur = shownBlur
+        shownPhoto = bitmap
+        shownBlur = blur
         slide.animate().cancel()
         slide.alpha = 0f
         slide.bringToFront()
         slide.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         slide.animate().alpha(1f).setDuration(FADE_MS).withEndAction {
             slide.setLayerType(View.LAYER_TYPE_NONE, null)
-            // The previous photo is freed as soon as it is fully covered
+            // The previous photo is freed as soon as it is fully covered. Explicitly: the Java heap
+            // stays tiny, so a GC (which would free it) can take many photos to come
             val old = slides[front]
-            if (old !== slide) (0 until old.childCount).forEach { (old.getChildAt(it) as ImageView).setImageDrawable(null) }
+            if (old !== slide) clear(old)
             front = back
+            if (oldPhoto !== bitmap) oldPhoto?.recycle()
+            if (oldBlur !== blur) oldBlur?.recycle()
         }.start()
         updateCaption(photo)
     }
