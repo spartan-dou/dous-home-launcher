@@ -39,23 +39,36 @@ class Weather(context: Context) {
         return (if (tomorrow) "Demain  " else "") + "$icon  $temps  ·  $label"
     }
 
-    /** True when the cached forecast is too old or for another place. */
-    fun stale(place: String): Boolean =
-        cache.getString("place_key", null) != place ||
-            System.currentTimeMillis() - cache.getLong("time", 0) > REFRESH_MS
+    /**
+     * True when the cached forecast is too old or for another place. After a failure, not before a
+     * pause: a service down is not asked again every few seconds.
+     */
+    fun stale(place: String): Boolean {
+        val now = System.currentTimeMillis()
+        if (now - lastFailure < RETRY_MS) return false
+        return cache.getString("place_key", null) != place || now - cache.getLong("time", 0) > REFRESH_MS
+    }
 
     /** Network: finds the place if needed and downloads the forecast. Worker thread only. */
     fun refresh(city: String) {
-        val place = if (city.isBlank()) placeFromIp() else geocode(city) ?: throw IOException("ville introuvable : $city")
-        val url = "https://api.open-meteo.com/v1/forecast?latitude=${place.lat}&longitude=${place.lon}" +
-            "&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=2"
-        cache.edit()
-            .putString("forecast", get(url))
-            .putString("place_key", city)
-            .putString("place_name", place.name)
-            .putLong("time", System.currentTimeMillis())
-            .apply()
+        try {
+            val place = if (city.isBlank()) placeFromIp() else geocode(city) ?: throw IOException("ville introuvable : $city")
+            val url = "https://api.open-meteo.com/v1/forecast?latitude=${place.lat}&longitude=${place.lon}" +
+                "&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=2"
+            cache.edit()
+                .putString("forecast", get(url))
+                .putString("place_key", city)
+                .putString("place_name", place.name)
+                .putLong("time", System.currentTimeMillis())
+                .apply()
+        } catch (e: Exception) {
+            lastFailure = System.currentTimeMillis()
+            throw e
+        }
     }
+
+    @Volatile
+    private var lastFailure = 0L
 
     val placeName: String?
         get() = cache.getString("place_name", null)
@@ -70,6 +83,7 @@ class Weather(context: Context) {
         private const val EVENING_HOUR = 18
         private const val DAY_MS = 24 * 60 * 60 * 1000L
         private const val REFRESH_MS = 60 * 60 * 1000L
+        private const val RETRY_MS = 15 * 60 * 1000L
 
         /** Town name to coordinates, also used by the phone set-up page to check what was typed. */
         fun geocode(city: String): Place? {

@@ -20,6 +20,32 @@ class StatusBar(private val context: Context, private val row: LinearLayout) {
     private val ram = item(R.drawable.ic_memory)
     private val memoryInfo = ActivityManager.MemoryInfo()
 
+    init {
+        // The Shield's own settings, next to the RAM: up from the apps reaches it
+        val size = Tiles.dp(context, 34)
+        val button = android.widget.FrameLayout(context).apply {
+            isFocusable = true
+            isClickable = true
+            contentDescription = context.getString(R.string.shield_settings)
+            background = AccentDisc()
+            setOnClickListener {
+                try {
+                    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                } catch (e: Exception) {
+                    android.util.Log.w("StatusBar", "No settings app", e)
+                }
+            }
+        }
+        val icon = ImageView(context).apply { setImageResource(R.drawable.ic_tune); alpha = 0.85f }
+        button.addView(icon, android.widget.FrameLayout.LayoutParams(Tiles.dp(context, 18), Tiles.dp(context, 18), Gravity.CENTER))
+        button.setOnFocusChangeListener { _, focused ->
+            icon.setColorFilter(if (focused) 0xFF15181E.toInt() else 0xFFFFFFFF.toInt())
+            icon.alpha = if (focused) 1f else 0.85f
+        }
+        row.addView(button, LinearLayout.LayoutParams(size, size).apply { marginStart = Tiles.dp(context, 12) })
+    }
+
     fun refresh() {
         val connectivity = context.getSystemService(ConnectivityManager::class.java)
         val caps = connectivity.getNetworkCapabilities(connectivity.activeNetwork)

@@ -54,6 +54,8 @@ class PhotoWall(
     private var shownBlur: Bitmap? = null
     private var started = false
     private var busy = false
+    // A "continue watching" picture is shown instead of the photos
+    private var media = false
 
     private val next = Runnable { showNext() }
 
@@ -97,6 +99,41 @@ class PhotoWall(
         worker.execute { photos = emptyList(); listKey = "" }
     }
 
+    /**
+     * Shows a "continue watching" picture in place of the photos, until [resumePhotos]. Decoded on
+     * the caller's thread: the photo worker may be busy downloading.
+     */
+    fun showMedia(bytes: ByteArray, stillWanted: () -> Boolean) {
+        val bitmap = decode(bytes) ?: return
+        val blur = Blur.fromJpeg(bytes)
+        main.post {
+            // The entry may have lost the focus meanwhile: then the photos simply go on
+            if (started && stillWanted()) {
+                media = true
+                main.removeCallbacks(next)
+                display(bitmap, blur, false, null)
+            } else {
+                bitmap.recycle()
+                blur?.recycle()
+            }
+        }
+    }
+
+    /** Back to the photos: the last one at once (from disk), the next one after the usual interval. */
+    fun resumePhotos() {
+        if (!media) return
+        media = false
+        main.removeCallbacks(next)
+        if (lastPhotoFile.exists()) worker.execute {
+            val bytes = lastPhotoFile.readBytes()
+            val bitmap = decode(bytes) ?: return@execute
+            val blur = Blur.fromJpeg(bytes)
+            main.post { if (started && !media) display(bitmap, blur, bitmap.height > bitmap.width, null) else bitmap.recycle() }
+        }
+        if (started) main.postDelayed(next, prefs.intervalSeconds * 1000L)
+    }
+
+
     private fun clear(slide: FrameLayout) =
         (0 until slide.childCount).forEach { (slide.getChildAt(it) as ImageView).setImageDrawable(null) }
 
@@ -112,7 +149,7 @@ class PhotoWall(
     }
 
     private fun showNext() {
-        if (!started || busy) return
+        if (!started || busy || media) return
         if (prefs.serverUrl.isBlank() || prefs.apiKey.isBlank()) {
             showMessage(context.getString(R.string.not_connected))
             return
@@ -142,7 +179,7 @@ class PhotoWall(
                         val blur = Blur.fromJpeg(bytes)
                         lastPhotoFile.writeBytes(bytes)
                         shown = true
-                        main.post { if (started) display(bitmap, blur, portrait, photo) }
+                        main.post { if (started && !media) display(bitmap, blur, portrait, photo) }
                     }
                 }
             } catch (e: Exception) {

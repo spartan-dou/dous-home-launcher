@@ -70,7 +70,7 @@ class Prefs(context: Context) {
     }
 
     val favourites: Set<String>
-        get() = appRows.orEmpty().flatMap { it.apps }.toSet()
+        get() = appRows.orEmpty().filter { !it.continueWatching }.flatMap { it.apps }.toSet()
 
     // Layout choices, all applied when the home screen comes back
     var dockOnTop: Boolean
@@ -143,17 +143,25 @@ class Prefs(context: Context) {
     }
 }
 
-/** One row of apps on the home screen: its title (empty: none), tile size and apps in order. */
-data class AppRow(var title: String, var size: Int, val apps: MutableList<String>) {
+/**
+ * One row of the home screen: its title (empty: none), tile size and apps in order. A "continue
+ * watching" row lists programs instead, and [apps] are then the apps they may come from (empty:
+ * all of them).
+ */
+data class AppRow(var title: String, var size: Int, val apps: MutableList<String>, val continueWatching: Boolean = false) {
     fun toJson(): JSONObject = JSONObject().put("title", title).put("size", size).put("apps", JSONArray(apps))
+        .apply { if (continueWatching) put("type", TYPE_CONTINUE) }
 
     companion object {
+        private const val TYPE_CONTINUE = "continue"
+
         fun fromJson(o: JSONObject): AppRow {
             val apps = o.optJSONArray("apps")
             return AppRow(
                 o.optString("title"),
                 o.optInt("size", 2).coerceIn(Prefs.TILE_WIDTHS.indices),
                 (0 until (apps?.length() ?: 0)).map { apps!!.getString(it) }.toMutableList(),
+                o.optString("type") == TYPE_CONTINUE,
             )
         }
     }

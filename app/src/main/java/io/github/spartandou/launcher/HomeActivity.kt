@@ -42,6 +42,8 @@ class HomeActivity : Activity() {
 
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
+    // The background of a focused "continue watching" entry, never queued behind tile pictures
+    private val mediaWorker = Executors.newSingleThreadExecutor()
     private var apps: List<App> = emptyList()
     private var appsDirty = true
     private var gridDirty = true
@@ -126,6 +128,7 @@ class HomeActivity : Activity() {
             if (apps.isNotEmpty()) { buildRows(); gridDirty = true }
         }
         if (appsDirty) loadApps()
+        loadPrograms()
     }
 
     override fun onResume() {
@@ -190,32 +193,42 @@ class HomeActivity : Activity() {
     }
 
     /**
-     * More rows than visible ones: moving up from the top visible row, or down from the bottom one,
-     * slides the window of visible rows by one, keeping the focus in the same column.
+     * Moving through the rows. Up from the very first row reaches "All apps" and the settings (the
+     * only way to them); past the visible rows the window slides by one; down from the last row
+     * goes back to the first. Left/right stay within the row.
      */
     private fun shiftRows(keyCode: Int): Boolean {
-        val up = keyCode == KeyEvent.KEYCODE_DPAD_UP
-        if (!up && keyCode != KeyEvent.KEYCODE_DPAD_DOWN) return false
         val focus = currentFocus ?: return false
-        // The round buttons sit on the first band: up from them slides too (the way back from an empty row)
-        val onButton = focus.tag == ALL_APPS || focus.tag == SETTINGS
-        // Down from them just goes to the tiles below
-        if (onButton && !up) return false
-        val band = if (onButton) 0 else rowLines.indexOfFirst { it === focus.parent }
+        val band = rowLines.indexOfFirst { it === focus.parent }
         if (band < 0) return false
-        val total = prefs.appRows.orEmpty().size
-        // Rows read top to bottom on screen whatever the dock position
-        val step = when {
-            up && band == 0 && rowOffset > 0 -> -1
-            !up && band == rowLines.size - 1 && rowOffset + rowLines.size < total -> 1
+        val line = rowLines[band]
+        val column = line.indexOfChild(focus)
+        when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT -> return column == 0
+            KeyEvent.KEYCODE_DPAD_RIGHT -> return column == line.childCount - 1
+            KeyEvent.KEYCODE_DPAD_UP -> {
+                if (band > 0) return false
+                if (rowOffset == 0) {
+                    rowsBox.findViewWithTag<View>(ALL_APPS)?.requestFocus()
+                    return true
+                }
+                rowOffset -= 1
+            }
+            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                if (band < rowLines.size - 1) return false
+                // Rows read top to bottom on screen whatever the dock position
+                if (rowOffset + rowLines.size < shownRows) rowOffset += 1 else rowOffset = 0
+            }
             else -> return false
         }
-        val column = if (onButton) 0 else rowLines[band].indexOfChild(focus)
-        rowOffset += step
         // No focused app to follow: that would bring the old row back into view
         buildRows(NO_FOCUS)
-        val line = rowLines[if (step < 0) 0 else rowLines.size - 1]
-        (line.getChildAt(column.coerceAtMost(line.childCount - 1))?.takeIf { it.isFocusable } ?: firstTile())?.requestFocus()
+        val target = when {
+            keyCode == KeyEvent.KEYCODE_DPAD_UP -> rowLines.first()
+            rowOffset == 0 -> rowLines.first()
+            else -> rowLines.last()
+        }
+        (target.getChildAt(column.coerceAtMost(target.childCount - 1))?.takeIf { it.isFocusable } ?: firstTile())?.requestFocus()
         return true
     }
 
@@ -328,45 +341,61 @@ class HomeActivity : Activity() {
 
     // Index of the first visible row, when there are more rows than visible ones
     private var rowOffset = 0
+    private var shownRows = 0
+
+    // "Continue watching" entries and their tile pictures
+    private var programs: List<Program> = emptyList()
+    private val programImages = HashMap<Long, android.graphics.drawable.Drawable>()
 
     private fun firstTile(): View? = rowLines.firstNotNullOfOrNull { it.getChildAt(0)?.takeIf { v -> v.isFocusable } }
 
     /**
-     * The visible window of rows, one band each (title, glass, tiles). "All apps" and the settings
-     * are two small round buttons on the first band's title line, they take no app's place.
+     * The visible window of rows, one band each (title, glass, tiles). Rows with nothing to show
+     * are left out. "All apps" and the settings are two small round buttons on the first band's
+     * title line, they take no app's place.
      */
     private fun buildRows(focusPackage: String? = null) {
         val focused = focusPackage ?: rowsBox.findFocus()?.tag as? String
         rowsBox.removeAllViews()
         rowLines.clear()
         val byPackage = apps.associateBy { it.packageName }
-        val rows = prefs.appRows.orEmpty().ifEmpty { listOf(AppRow("", 2, mutableListOf())) }
+        // What each row shows: its installed apps, or its programs
+        val shown = prefs.appRows.orEmpty().map { row ->
+            row to if (row.continueWatching) programsFor(row) else row.apps.mapNotNull { byPackage[it] }
+        }.filter { it.second.isNotEmpty() }
+        // Nothing at all: one empty band still carries the round buttons
+        val rows = shown.ifEmpty { listOf(AppRow("", 2, mutableListOf()) to emptyList()) }
+        shownRows = rows.size
         val visible = prefs.visibleRows.coerceAtMost(rows.size)
         rowOffset = rowOffset.coerceIn(0, rows.size - visible)
         // A focused app on another row brings its row into view
-        rows.indexOfFirst { focused in it.apps }.takeIf { it >= 0 }?.let { r ->
+        rows.indexOfFirst { (row, _) -> !row.continueWatching && focused in row.apps }.takeIf { it >= 0 }?.let { r ->
             if (r < rowOffset) rowOffset = r else if (r >= rowOffset + visible) rowOffset = r - visible + 1
         }
         var toFocus: View? = null
         for (b in 0 until visible) {
             val r = rowOffset + b
-            val row = rows[r]
+            val (row, items) = rows[r]
             val position = if (rows.size > visible) "${r + 1} / ${rows.size}" else null
-            val (line, name) = newBand(row.title, first = b == 0, position = position)
+            // The round buttons only above the very first row
+            val (line, name) = newBand(row.title, first = b == 0 && r == 0, position = position)
             val width = Tiles.dp(this, Prefs.TILE_WIDTHS[row.size])
-            val rowApps = row.apps.mapNotNull { byPackage[it] }
-            rowApps.forEach { app ->
-                val tile = appTile(app, width, rowImages, name)
-                tile.tag = app.packageName
-                tile.setOnClickListener { launch(app) }
-                tile.setOnLongClickListener { editFavourite(app); true }
+            items.forEach { item ->
+                val tile = when (item) {
+                    is App -> appTile(item, width, rowImages, name).apply {
+                        tag = item.packageName
+                        setOnClickListener { launch(item) }
+                        setOnLongClickListener { editFavourite(item); true }
+                    }
+                    is Program -> programTile(item, width, name)
+                    else -> return@forEach
+                }
                 line.addView(tile, tileParams(width))
-                if (app.packageName == focused) toFocus = tile
+                if (tile.tag == focused) toFocus = tile
             }
-            if (rowApps.isEmpty()) {
-                // An empty row says how to fill it instead of collapsing
+            if (items.isEmpty()) {
                 line.addView(TextView(this).apply {
-                    text = getString(R.string.empty_row)
+                    text = getString(R.string.empty_home)
                     setTextColor(0x99FFFFFF.toInt())
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                     gravity = Gravity.CENTER_VERTICAL
@@ -376,6 +405,118 @@ class HomeActivity : Activity() {
         }
         if (focused == ALL_APPS || focused == SETTINGS) toFocus = rowsBox.findViewWithTag(focused)
         (toFocus ?: firstTile())?.requestFocus()
+    }
+
+    private fun programsFor(row: AppRow) = programs.filter { row.apps.isEmpty() || it.packageName in row.apps }
+
+    /**
+     * A "continue watching" entry: its still, a progress bar when known. Focused for a moment, it
+     * puts its picture behind the home screen instead of the photo.
+     */
+    private fun programTile(program: Program, width: Int, name: TextView): FrameLayout {
+        val label = listOfNotNull(program.title, program.subtitle).joinToString("  ·  ")
+        val tile = Tiles.create(this, program.title) { focused ->
+            name.text = if (focused) label else ""
+            if (focused) focusMedia(program) else main.post { if (currentFocus?.tag !is Long) leaveMedia() }
+        }
+        tile.tag = program.id
+        tile.setOnClickListener {
+            try {
+                WatchNext.intent(this, program)?.let { startActivity(it) }
+            } catch (e: Exception) {
+                Log.w(TAG, "Cannot open ${program.title}", e)
+                Toast.makeText(this, e.message, Toast.LENGTH_SHORT).show()
+            }
+        }
+        fun show(picture: android.graphics.drawable.Drawable?) {
+            Tiles.fill(this, tile, program.title, picture, if (picture == null) getDrawable(R.drawable.ic_play) else null)
+            program.progress?.let { p ->
+                // Thin progress bar along the bottom edge
+                tile.addView(View(this).apply { setBackgroundColor(Accent.color) },
+                    FrameLayout.LayoutParams((width * p).toInt().coerceAtLeast(1), Tiles.dp(this, 4), Gravity.BOTTOM))
+            }
+        }
+        val cached = programImages[program.id]
+        if (cached != null) show(cached) else {
+            show(null)
+            program.image?.let { uri ->
+                worker.execute {
+                    val bitmap = try { WatchNext.bytes(this, uri)?.let { WatchNext.decode(it, width) } } catch (e: Exception) { null }
+                    main.post {
+                        val picture = bitmap?.let { centreCrop(it, width, Tiles.height(width)) }
+                        if (picture != null) programImages[program.id] = picture
+                        if (tile.isAttachedToWindow) show(picture)
+                    }
+                }
+            }
+        }
+        return tile
+    }
+
+    // 16:9 crop at the tile size: app stills come in any shape
+    private fun centreCrop(bitmap: android.graphics.Bitmap, width: Int, height: Int): android.graphics.drawable.Drawable {
+        val out = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+        val scale = maxOf(width.toFloat() / bitmap.width, height.toFloat() / bitmap.height)
+        val matrix = android.graphics.Matrix().apply {
+            setScale(scale, scale)
+            postTranslate((width - bitmap.width * scale) / 2, (height - bitmap.height * scale) / 2)
+        }
+        android.graphics.Canvas(out).drawBitmap(bitmap, matrix, android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
+        bitmap.recycle()
+        return android.graphics.drawable.BitmapDrawable(resources, out)
+    }
+
+    // The background follows a focused entry after a short pause, so fast scrolling loads nothing
+    private var mediaTarget: Program? = null
+    private val showMedia = Runnable {
+        val program = mediaTarget ?: return@Runnable
+        val uri = program.background ?: return@Runnable
+        mediaWorker.execute {
+            // A broken picture must never take the home screen down
+            try {
+                val bytes = WatchNext.bytes(this, uri) ?: return@execute
+                if (mediaTarget == program) wall.showMedia(bytes) { mediaTarget == program }
+            } catch (e: Exception) {
+                Log.w(TAG, "Background not shown for ${program.title}", e)
+            }
+        }
+    }
+
+    private fun focusMedia(program: Program) {
+        mediaTarget = program
+        main.removeCallbacks(showMedia)
+        main.postDelayed(showMedia, MEDIA_DELAY_MS)
+    }
+
+    private fun leaveMedia() {
+        if (mediaTarget == null) return
+        mediaTarget = null
+        main.removeCallbacks(showMedia)
+        wall.resumePhotos()
+    }
+
+    /** Reads the "continue watching" entries again (they change as things are watched). */
+    private fun loadPrograms() {
+        if (prefs.appRows.orEmpty().none { it.continueWatching }) return
+        if (checkSelfPermission(READ_TV_LISTINGS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(READ_TV_LISTINGS), 1)
+            return
+        }
+        worker.execute {
+            val loaded = WatchNext.load(this, emptyList())
+            main.post {
+                if (loaded == programs) return@post
+                programs = loaded
+                // Keeps only the pictures still in use
+                programImages.keys.retainAll(loaded.map { it.id }.toSet())
+                buildRows()
+            }
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) loadPrograms()
     }
 
     /** A tile whose picture is rendered on the worker thread, or taken from [cache] when it has it. */
@@ -423,7 +564,8 @@ class HomeActivity : Activity() {
         }
         band.addView(header, LinearLayout.LayoutParams(-1, -2))
 
-        val glassBox = FrameLayout(this).apply { clipChildren = false; clipToPadding = false }
+        // Clips the scroller (and its tiles) to the band: the frame is where tiles fade out
+        val glassBox = FrameLayout(this).apply { clipChildren = true; clipToPadding = false }
         glassBox.addView(GlassView(this), FrameLayout.LayoutParams(-1, -1))
         val line = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -434,7 +576,9 @@ class HomeActivity : Activity() {
         }
         val scroller = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
-            clipChildren = false
+            // Clipped to the band: tiles past the edge fade out there instead of spilling over (the
+            // line's padding leaves room for the focus zoom)
+            clipChildren = true
             clipToPadding = false
             // Tiles past the edge fade out instead of being cut, and the scroll keeps the focused
             // tile this far from the edge (the fading edge length is also the scroll margin)
@@ -456,7 +600,8 @@ class HomeActivity : Activity() {
 
     /** Small round icon button of the first band's title line; its name shows while focused. */
     private fun roundButton(icon: Int, label: String, tag: String, name: TextView, onClick: () -> Unit): View {
-        val size = Tiles.dp(this, 40)
+        // Discreet: a small plain icon, the coloured disc only shows on focus
+        val size = Tiles.dp(this, 34)
         return FrameLayout(this).apply {
             this.tag = tag
             contentDescription = label
@@ -465,12 +610,13 @@ class HomeActivity : Activity() {
             isLongClickable = true
             // Focus fills the disc with the accent colour and darkens the icon
             background = AccentDisc()
-            val image = android.widget.ImageView(context).apply { setImageResource(icon) }
-            addView(image, FrameLayout.LayoutParams(Tiles.dp(context, 22), Tiles.dp(context, 22), Gravity.CENTER))
+            val image = android.widget.ImageView(context).apply { setImageResource(icon); alpha = 0.7f }
+            addView(image, FrameLayout.LayoutParams(Tiles.dp(context, 20), Tiles.dp(context, 20), Gravity.CENTER))
             setOnClickListener { onClick() }
             setOnFocusChangeListener { view, focused ->
                 name.text = if (focused) label else ""
                 image.setColorFilter(if (focused) 0xFF15181E.toInt() else Color.WHITE)
+                image.alpha = if (focused) 1f else 0.7f
                 val scale = if (focused) 1.15f else 1f
                 view.animate().scaleX(scale).scaleY(scale).setDuration(120).start()
             }
@@ -530,11 +676,13 @@ class HomeActivity : Activity() {
     /** From "all apps": put the app on a row (one choice per row, by title), or take it off the home screen. */
     private fun chooseRow(app: App) {
         val rows = prefs.appRows.orEmpty().toMutableList().ifEmpty { mutableListOf(AppRow("", 2, mutableListOf())) }
-        val current = rows.indexOfFirst { app.packageName in it.apps }
+        val current = rows.indexOfFirst { !it.continueWatching && app.packageName in it.apps }
         val actions = mutableListOf<Pair<String, () -> Unit>>()
-        rows.indices.filter { it != current }.forEach { r ->
-            val label = if (rows.size == 1) getString(R.string.add_home) else getString(R.string.add_to_row, rowName(rows[r], r))
-            actions += label to { rows.forEach { it.apps.remove(app.packageName) }; rows[r].apps += app.packageName }
+        // Only app rows: a "continue watching" row lists programs
+        val appRows = rows.indices.filter { !rows[it].continueWatching }
+        appRows.filter { it != current }.forEach { r ->
+            val label = if (appRows.size == 1) getString(R.string.add_home) else getString(R.string.add_to_row, rowName(rows[r], r))
+            actions += label to { appRows.forEach { rows[it].apps.remove(app.packageName) }; rows[r].apps += app.packageName }
         }
         if (current >= 0) actions += getString(R.string.remove) to { rows[current].apps.remove(app.packageName) }
 
@@ -553,7 +701,7 @@ class HomeActivity : Activity() {
 
     private fun editFavourite(app: App) {
         val rows = prefs.appRows.orEmpty()
-        val r = rows.indexOfFirst { app.packageName in it.apps }
+        val r = rows.indexOfFirst { !it.continueWatching && app.packageName in it.apps }
         if (r < 0) return
         val apps = rows[r].apps
         val i = apps.indexOf(app.packageName)
@@ -562,7 +710,7 @@ class HomeActivity : Activity() {
         if (i > 0) actions += getString(R.string.move_left) to { apps.add(i - 1, apps.removeAt(i)) }
         if (i < apps.size - 1) actions += getString(R.string.move_right) to { apps.add(i + 1, apps.removeAt(i)) }
         // Any other row, hidden ones included: the moved app brings its new row into view
-        rows.indices.filter { it != r }.forEach { other ->
+        rows.indices.filter { it != r && !rows[it].continueWatching }.forEach { other ->
             actions += getString(R.string.move_to_row, rowName(rows[other], other)) to { apps.removeAt(i); rows[other].apps += app.packageName }
         }
         actions += getString(R.string.remove) to { apps.removeAt(i) }
@@ -602,5 +750,7 @@ class HomeActivity : Activity() {
         private const val ALL_APPS = "all_apps"
         private const val SETTINGS = "settings"
         private const val NO_FOCUS = ""
+        private const val MEDIA_DELAY_MS = 500L
+        private const val READ_TV_LISTINGS = "android.permission.READ_TV_LISTINGS"
     }
 }

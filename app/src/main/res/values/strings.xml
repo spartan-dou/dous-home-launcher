@@ -9,7 +9,8 @@
     <string name="not_connected">Connectez Immich depuis « Réglages de l\'accueil »</string>
     <string name="no_album">Choisissez des albums dans « Réglages de l\'accueil »</string>
     <string name="no_photos">Aucune photo dans les albums choisis</string>
-    <string name="empty_row">Rangée vide : appui long sur une appli pour l\'y déplacer</string>
+    <string name="empty_home">Aucune appli à l\'accueil : Réglages → Rangées, ou appui long dans « Toutes les applis »</string>
+    <string name="shield_settings">Paramètres de la Shield</string>
 
     <!-- App menus -->
     <string name="move_left">Déplacer vers la gauche</string>
@@ -95,6 +96,12 @@
         <item quantity="other">%1$d applis</item>
     </plurals>
     <string name="add_row">+ Ajouter une rangée</string>
+    <string name="add_continue_row">+ Ajouter la rangée « Reprendre la lecture »</string>
+    <string name="continue_title">Reprendre la lecture</string>
+    <string name="continue_summary">Reprendre la lecture</string>
+    <string name="continue_sources">Applis incluses</string>
+    <string name="continue_sources_hint">Les vidéos en cours de ces applis. Aucune cochée : toutes les applis.</string>
+    <string name="continue_none">Aucune appli ne propose encore de vidéo à reprendre.</string>
     <string name="rows_hint">Autant de rangées que vous voulez : celles qui ne tiennent pas à l\'écran apparaissent en allant plus haut ou plus bas. Un appui long sur une appli de l\'accueil permet aussi de la déplacer.</string>
     <string name="back_to_rows">← Toutes les rangées</string>
     <string name="row_n">Rangée %1$d</string>

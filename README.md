@@ -35,6 +35,10 @@ Après 30 s sans toucher la télécommande, les applis s'effacent et seule la ph
 
 **Réglages** (roue dentée, appui long sur Menu) : menu à gauche comme les paramètres Android TV — Photos, Albums (3 colonnes, cochés en premier), Météo (ville modifiable à la télécommande), Affichage, Mise en page, Connexion Immich (QR code).
 
+**Reprendre la lecture** : une rangée spéciale, placée parmi les autres, qui liste ce que les applis publient pour l'accueil Android TV (Wholphin, Jellyfin, M6+…), en choisissant les applis incluses. Sur une vidéo, le fond prend son image après une demi-seconde ; il revient aux photos en quittant la rangée. Demande l'autorisation `READ_TV_LISTINGS` (une fois). Les images de serveurs locaux en HTTP sont autorisées.
+
+Navigation : haut depuis la première rangée atteint « Toutes les applis » et les réglages (petites icônes) ; bas depuis la dernière rangée revient à la première. En haut à droite, une icône ouvre les paramètres de la Shield.
+
 **Mise en page** :
 - applis en bas ou en haut de l'écran ;
 - 1 à 3 rangées d'applis indépendantes, chacune dans son propre bandeau de verre, avec un titre (modifiable, ou aucun) et une taille petite, moyenne ou grande ;

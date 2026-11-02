@@ -4,6 +4,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Status bar: Wi-Fi or Ethernet -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- "Continue watching": the programs apps publish to the Android TV home screen -->
+    <uses-permission android:name="android.permission.READ_TV_LISTINGS" />
+    <uses-permission android:name="com.android.providers.tv.permission.READ_EPG_DATA" />
 
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
@@ -20,12 +23,15 @@
         </intent>
     </queries>
 
+    <!-- usesCleartextTraffic: "continue watching" pictures come from local servers over plain HTTP
+         (e.g. Jellyfin at http://192.168.x.x:8096) -->
     <application
         android:allowBackup="false"
         android:banner="@drawable/banner"
         android:icon="@drawable/banner"
         android:label="@string/app_name"
         android:supportsRtl="false"
+        android:usesCleartextTraffic="true"
         android:theme="@style/Theme.Launcher">
 
         <activity

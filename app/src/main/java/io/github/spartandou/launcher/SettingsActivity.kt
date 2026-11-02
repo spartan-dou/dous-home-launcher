@@ -238,8 +238,12 @@ class SettingsActivity : Activity() {
         add(subheader(getString(R.string.your_rows)))
         val sizes = array(R.array.tile_sizes)
         rows.forEachIndexed { i, row ->
-            val installed = apps?.let { list -> row.apps.count { pkg -> list.any { it.packageName == pkg } } } ?: row.apps.size
-            val summary = resources.getQuantityString(R.plurals.app_count, installed, installed) + " · " + sizes[row.size]
+            val summary = if (row.continueWatching) {
+                getString(R.string.continue_summary) + " · " + sizes[row.size]
+            } else {
+                val installed = apps?.let { list -> row.apps.count { pkg -> list.any { it.packageName == pkg } } } ?: row.apps.size
+                resources.getQuantityString(R.plurals.app_count, installed, installed) + " · " + sizes[row.size]
+            }
             add(choice(rowName(row, i), { summary }) { editedRow = i; refresh(focus = 1) })
         }
         add(action(getString(R.string.add_row)) {
@@ -248,7 +252,36 @@ class SettingsActivity : Activity() {
             editedRow = updated.lastIndex
             refresh(focus = 1)
         })
+        // One "continue watching" row at most, placed and set up like the others
+        if (rows.none { it.continueWatching }) add(action(getString(R.string.add_continue_row)) {
+            val updated = rows + AppRow(getString(R.string.continue_title), 1, mutableListOf(), continueWatching = true)
+            prefs.appRows = updated
+            editedRow = updated.lastIndex
+            refresh(focus = 1)
+        })
         add(hint(getString(R.string.rows_hint)))
+    }
+
+    /** The apps whose entries the "continue watching" row shows; none ticked means all of them. */
+    private fun continueSources(row: AppRow, save: () -> Unit) {
+        add(subheader(getString(R.string.continue_sources)))
+        add(hint(getString(R.string.continue_sources_hint)))
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        add(box)
+        Thread {
+            val publishers = (WatchNext.publishers(this) + row.apps).distinct()
+            main.post {
+                if (isDestroyed || content.indexOfChild(box) < 0) return@post
+                if (publishers.isEmpty()) box.addView(hint(getString(R.string.continue_none)))
+                publishers.forEach { pkg ->
+                    val label = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() } catch (e: Exception) { pkg }
+                    box.addView(check(label, pkg in row.apps) { checked ->
+                        if (checked) row.apps += pkg else row.apps.remove(pkg)
+                        save()
+                    })
+                }
+            }
+        }.start()
     }
 
     private fun rowPage(r: Int) {
@@ -264,29 +297,31 @@ class SettingsActivity : Activity() {
         })
         add(pick(getString(R.string.row_size_label), array(R.array.tile_sizes), { row.size }) { row.size = it; save() })
 
-        add(subheader(getString(R.string.row_apps)))
-        val labels = apps.orEmpty().associate { it.packageName to it.label }
-        // Apps uninstalled since they were put on the row are left out (home skips them too)
-        row.apps.toList().forEachIndexed { i, pkg ->
-            if (apps != null && pkg !in labels) return@forEachIndexed
-            add(choice(labels[pkg] ?: pkg, { "" }) {
-                val actions = mutableListOf<Pair<String, () -> Unit>>()
-                if (i > 0) actions += getString(R.string.move_left) to { row.apps.add(i - 1, row.apps.removeAt(i)) }
-                if (i < row.apps.size - 1) actions += getString(R.string.move_right) to { row.apps.add(i + 1, row.apps.removeAt(i)) }
-                rows.indices.filter { it != r }.forEach { other ->
-                    actions += getString(R.string.move_to_row, rowName(rows[other], other)) to { row.apps.removeAt(i); rows[other].apps += pkg }
-                }
-                actions += getString(R.string.remove) to { row.apps.removeAt(i) }
-                menu(labels[pkg] ?: pkg, actions) { save(); refresh() }
+        if (row.continueWatching) continueSources(row) { save() } else {
+            add(subheader(getString(R.string.row_apps)))
+            val labels = apps.orEmpty().associate { it.packageName to it.label }
+            // Apps uninstalled since they were put on the row are left out (home skips them too)
+            row.apps.toList().forEachIndexed { i, pkg ->
+                if (apps != null && pkg !in labels) return@forEachIndexed
+                add(choice(labels[pkg] ?: pkg, { "" }) {
+                    val actions = mutableListOf<Pair<String, () -> Unit>>()
+                    if (i > 0) actions += getString(R.string.move_left) to { row.apps.add(i - 1, row.apps.removeAt(i)) }
+                    if (i < row.apps.size - 1) actions += getString(R.string.move_right) to { row.apps.add(i + 1, row.apps.removeAt(i)) }
+                    rows.indices.filter { it != r && !rows[it].continueWatching }.forEach { other ->
+                        actions += getString(R.string.move_to_row, rowName(rows[other], other)) to { row.apps.removeAt(i); rows[other].apps += pkg }
+                    }
+                    actions += getString(R.string.remove) to { row.apps.removeAt(i) }
+                    menu(labels[pkg] ?: pkg, actions) { save(); refresh() }
+                })
+            }
+            add(action(getString(R.string.add_app)) {
+                // Apps on another row move here; the ones already on this row are not offered
+                val candidates = apps.orEmpty().filter { it.packageName !in row.apps && it.packageName != packageName }
+                menu(getString(R.string.add_app), candidates.map { app ->
+                    app.label to { rows.filter { !it.continueWatching }.forEach { it.apps.remove(app.packageName) }; row.apps += app.packageName }
+                }) { save(); refresh() }
             })
         }
-        add(action(getString(R.string.add_app)) {
-            // Apps on another row move here; the ones already on this row are not offered
-            val candidates = apps.orEmpty().filter { it.packageName !in row.apps && it.packageName != packageName }
-            menu(getString(R.string.add_app), candidates.map { app ->
-                app.label to { rows.forEach { it.apps.remove(app.packageName) }; row.apps += app.packageName }
-            }) { save(); refresh() }
-        })
 
         add(subheader(getString(R.string.row_order)))
         if (r > 0) add(action(getString(R.string.row_up)) { rows.add(r - 1, rows.removeAt(r)); save(); editedRow = r - 1; refresh() })

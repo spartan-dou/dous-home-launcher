@@ -89,13 +89,15 @@ class FocusFrame(private val radius: Float, strokeWidth: Float) : Drawable() {
     override fun getOpacity() = PixelFormat.TRANSLUCENT
 }
 
-/** Round button background: dark glass at rest, filled with the [Accent] colour when focused. */
+/** Round button background: nothing at rest, a disc of the [Accent] colour when focused. */
 class AccentDisc : Drawable() {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var focused = false
 
     override fun draw(canvas: Canvas) {
-        paint.color = if (focused) Accent.color else 0x59000000
+        // At rest only the icon shows: the disc appears with the focus
+        if (!focused) return
+        paint.color = Accent.color
         val r = minOf(bounds.width(), bounds.height()) / 2f
         canvas.drawCircle(bounds.exactCenterX(), bounds.exactCenterY(), r, paint)
     }

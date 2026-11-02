@@ -32,8 +32,11 @@ object Blur {
             boxPass(pixels, buffer, width, height, RADIUS, horizontal = true)
             boxPass(buffer, pixels, width, height, RADIUS, horizontal = false)
         }
-        scaled.setPixels(pixels, 0, width, 0, 0, width, height)
-        return scaled
+        // Into a new bitmap: the scaled one may be the decoded one itself, which is read-only
+        val out = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        out.setPixels(pixels, 0, width, 0, 0, width, height)
+        scaled.recycle()
+        return out
     }
 
     private const val RADIUS = 5
