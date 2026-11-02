@@ -123,7 +123,7 @@ object WatchNext {
                         packageName = channel.packageName,
                         title = text(cTitle) ?: continue,
                         subtitle = text(cEpisode),
-                        image = text(cPoster) ?: text(cThumb),
+                        image = (text(cPoster) ?: text(cThumb))?.let { portrait(it) },
                         background = text(cPoster) ?: text(cThumb),
                         intentUri = text(cIntent),
                         progress = null,
@@ -139,6 +139,15 @@ object WatchNext {
         for (i in 0 until longest) lists.forEach { (channel, list) -> list.getOrNull(i)?.let { mixed += it to channel } }
         return mixed
     }
+
+    /**
+     * Jellyfin (and Wholphin, which shows Jellyfin libraries) often publish a landscape still; the
+     * same item's "Primary" image is its portrait poster. Asked at the panel's size, not full size.
+     */
+    private val JELLYFIN_IMAGE = Regex("""^(.*/Items/[^/]+/Images/)(Thumb|Backdrop|Banner|Primary)(/\d+)?(\?.*)?$""")
+
+    fun portrait(uri: String): String =
+        JELLYFIN_IMAGE.matchEntire(uri)?.let { "${it.groupValues[1]}Primary?maxHeight=600&quality=90" } ?: uri
 
     /** Packages that publish entries, for choosing the sources. Worker thread. */
     fun publishers(context: Context): List<String> = load(context, emptyList()).map { it.packageName }.distinct()

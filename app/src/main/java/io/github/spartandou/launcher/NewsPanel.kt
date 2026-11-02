@@ -117,7 +117,7 @@ class NewsPanel(
 
     /**
      * Sizes the poster to the height left between the top of the screen and the rows (portrait
-     * 2:3, at most 200 dp wide); below a minimum the panel is hidden rather than squeezed.
+     * 2:3, at most 140 dp wide); below a minimum the panel is hidden rather than squeezed.
      */
     fun fit(available: Int) {
         val maxHeight = Tiles.dp(context, MAX_WIDTH_DP) * 3 / 2
@@ -218,7 +218,7 @@ class NewsPanel(
 
     companion object {
         private const val ROTATE_MS = 8_000L
-        private const val MAX_WIDTH_DP = 200
+        private const val MAX_WIDTH_DP = 140
         private const val MIN_HEIGHT_DP = 130
         private const val FADE_MS = 700L
     }
