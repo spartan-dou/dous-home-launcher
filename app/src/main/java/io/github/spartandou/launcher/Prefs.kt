@@ -77,6 +77,11 @@ class Prefs(context: Context) {
 
     fun setRowSize(row: Int, size: Int) = prefs.edit().putInt("row_size_$row", size).apply()
 
+    /** Title shown above each row's band; empty hides it. */
+    fun rowTitle(row: Int): String = prefs.getString("row_title_$row", null) ?: DEFAULT_TITLES[row]
+
+    fun setRowTitle(row: Int, title: String) = prefs.edit().putString("row_title_$row", title.trim()).apply()
+
     var clockPosition: Int
         get() = prefs.getInt("clock_position", CLOCK_LEFT)
         set(value) = prefs.edit().putInt("clock_position", value).apply()
@@ -108,7 +113,7 @@ class Prefs(context: Context) {
 
     /** Changes whenever the layout changes, so the home screen rebuilds it. */
     val layoutKey: String
-        get() = "$dockOnTop|$rowCount|${(0 until MAX_ROWS).joinToString { rowSize(it).toString() }}|$clockPosition|$accent|" +
+        get() = "$dockOnTop|$rowCount|${(0 until MAX_ROWS).joinToString { "${rowSize(it)}:${rowTitle(it)}" }}|$clockPosition|$accent|" +
             "$showWeather|$showStatus"
 
     companion object {
@@ -119,6 +124,8 @@ class Prefs(context: Context) {
 
         // Small, medium, large, in dp (16:9 banners)
         val TILE_WIDTHS = intArrayOf(136, 168, 208)
+
+        val DEFAULT_TITLES = arrayOf("Favoris", "Rangée 2", "Rangée 3")
 
         const val CLOCK_LEFT = 0
         const val CLOCK_RIGHT = 1

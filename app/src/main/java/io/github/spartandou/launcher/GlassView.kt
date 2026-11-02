@@ -41,7 +41,20 @@ class GlassView @JvmOverloads constructor(context: Context, attrs: AttributeSet?
         get() = tintPaint.color
         set(value) { tintPaint.color = value; invalidate() }
 
-    fun setBlur(bitmap: Bitmap?, fadeMs: Long) {
+    // Every glass on screen shows the same photo: one created later (a new row band) starts on it
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        live += this
+        if (current == null) { current = shared; mix = 1f }
+    }
+
+    override fun onDetachedFromWindow() {
+        live -= this
+        fade?.cancel()
+        super.onDetachedFromWindow()
+    }
+
+    private fun setBlur(bitmap: Bitmap?, fadeMs: Long) {
         fade?.cancel()
         previous = current
         current = bitmap
@@ -99,5 +112,16 @@ class GlassView @JvmOverloads constructor(context: Context, attrs: AttributeSet?
     companion object {
         // ~14 %: a tint, not a colour fill
         private const val SHEEN_ALPHA = 0x24000000
+
+        private val live = mutableSetOf<GlassView>()
+        private var shared: Bitmap? = null
+
+        /** The photo wall's new blurred copy, for all the glass on screen (main thread). */
+        fun showAll(bitmap: Bitmap?, fadeMs: Long) {
+            shared = bitmap
+            live.forEach { it.setBlur(bitmap, fadeMs) }
+        }
+
+        fun invalidateAll() = live.forEach { it.invalidate() }
     }
 }

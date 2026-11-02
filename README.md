@@ -33,9 +33,11 @@ Après 30 s sans toucher la télécommande, les applis s'effacent et seule la ph
 
 **En haut à droite**, en icônes ombrées comme l'heure : la connexion (Wi-Fi ou Ethernet) et la RAM utilisée par la Shield, puis le lieu et la date de la photo. La charge du processeur et les piles de la télécommande ne sont pas lisibles par une appli sur la Shield (Android 8+ et service NVIDIA).
 
-**Mise en page**, dans *Réglages de l'accueil* :
+**Réglages** (roue dentée, appui long sur Menu) : menu à gauche comme les paramètres Android TV — Photos, Albums (3 colonnes, cochés en premier), Météo (ville modifiable à la télécommande), Affichage, Mise en page, Connexion Immich (QR code).
+
+**Mise en page** :
 - applis en bas ou en haut de l'écran ;
-- 1 à 3 rangées d'applis, chacune petite, moyenne ou grande ;
+- 1 à 3 rangées d'applis indépendantes, chacune dans son propre bandeau de verre, avec un titre (modifiable, ou aucun) et une taille petite, moyenne ou grande ;
 - horloge à gauche, à droite, au centre ou masquée (du côté opposé aux applis), la barre d'état et la légende de la photo prenant le coin libre ;
 - couleur d'accent du cadre de focus : blanc, bleu glacier, lavande, rose, ambre, menthe, ou automatique (la couleur la plus vive de chaque photo, tirée de sa copie floutée).
 

@@ -45,8 +45,11 @@
             </intent-filter>
         </activity>
 
+        <!-- noHistory: closed as soon as it is left, so its album list never stays in memory -->
         <activity
             android:name=".SettingsActivity"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
             android:exported="true"
             android:label="@string/settings_name"
             android:windowSoftInputMode="adjustPan">

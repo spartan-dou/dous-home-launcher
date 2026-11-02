@@ -33,7 +33,6 @@ class PhotoWall(
     private val caption: TextView,
     private val captionDate: TextView,
     private val prefs: Prefs,
-    private val glass: List<GlassView>,
     // Each new photo's blurred copy, for the automatic accent colour
     private val onPhoto: (Bitmap) -> Unit,
 ) {
@@ -86,7 +85,7 @@ class PhotoWall(
 
     /** Called when Android asks for memory back: the photos are dropped, the last one stays on disk. */
     fun release() {
-        glass.forEach { it.setBlur(null, 0) }
+        GlassView.showAll(null, 0)
         slides.forEach { slide ->
             slide.animate().cancel()
             clear(slide)
@@ -212,7 +211,7 @@ class PhotoWall(
         }
         // Portrait photos sit on a blurred, darkened copy of themselves; the glass surfaces use it too
         (slide.getChildAt(0) as ImageView).setImageBitmap(if (portrait) blur else null)
-        glass.forEach { it.setBlur(blur, FADE_MS) }
+        GlassView.showAll(blur, FADE_MS)
         blur?.let(onPhoto)
 
         val oldPhoto = shownPhoto

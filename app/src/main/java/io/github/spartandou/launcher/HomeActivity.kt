@@ -7,6 +7,7 @@ import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -36,7 +37,6 @@ class HomeActivity : Activity() {
     private lateinit var weatherView: TextView
     private lateinit var infoBox: LinearLayout
     private lateinit var statusBox: View
-    private lateinit var focusedLabel: TextView
     private lateinit var allApps: View
     private lateinit var grid: GridLayout
 
@@ -90,23 +90,20 @@ class HomeActivity : Activity() {
         weatherView = findViewById(R.id.weather)
         infoBox = findViewById(R.id.info_box)
         statusBox = findViewById(R.id.status_box)
-        focusedLabel = findViewById(R.id.focused_label)
         allApps = findViewById(R.id.all_apps)
         grid = findViewById(R.id.grid)
         status = StatusBar(this, findViewById(R.id.status_box))
 
         val slides = findViewById<FrameLayout>(R.id.slides)
-        val allAppsGlass = findViewById<GlassView>(R.id.all_apps_glass).apply { cornerRadius = 0f; tint = 0x99000000.toInt() }
-        val glass = listOf<GlassView>(findViewById(R.id.dock_glass), allAppsGlass)
+        findViewById<GlassView>(R.id.all_apps_glass).apply { cornerRadius = 0f; tint = 0x99000000.toInt() }
         wall = PhotoWall(this, listOf(slides.getChildAt(0) as FrameLayout, slides.getChildAt(1) as FrameLayout),
-            findViewById(R.id.caption_box), findViewById(R.id.caption), findViewById(R.id.caption_date), prefs,
-            glass) { blur ->
+            findViewById(R.id.caption_box), findViewById(R.id.caption), findViewById(R.id.caption_date), prefs) { blur ->
             if (prefs.accent == Prefs.ACCENT_AUTO) Accent.set(Accent.fromPhoto(blur), animate = true)
         }
         // The focused tile's frame and the glass (lightly tinted) follow the accent colour
         Accent.onChange = {
             window.decorView.findFocus()?.invalidate()
-            glass.forEach { it.invalidate() }
+            GlassView.invalidateAll()
         }
 
         registerReceiver(packageReceiver, IntentFilter().apply {
@@ -218,13 +215,6 @@ class HomeActivity : Activity() {
             topMargin = if (top) m else 0
             bottomMargin = if (top) 0 else m
         }
-        // The focused app name sits on the outer side of the rows
-        dock.removeView(focusedLabel)
-        dock.addView(focusedLabel, if (top) dock.childCount else 0)
-        (focusedLabel.layoutParams as LinearLayout.LayoutParams).apply {
-            topMargin = if (top) Tiles.dp(this@HomeActivity, 8) else 0
-            bottomMargin = if (top) 0 else Tiles.dp(this@HomeActivity, 8)
-        }
 
         val vertical = if (top) Gravity.BOTTOM else Gravity.TOP
         val clock = prefs.clockPosition
@@ -301,22 +291,23 @@ class HomeActivity : Activity() {
         }
     }
 
-    private fun firstTile(): View? = (0 until rowsBox.childCount).firstNotNullOfOrNull { rowTiles(it)?.getChildAt(0) }
+    private val rowLines = mutableListOf<LinearLayout>()
 
-    private fun rowTiles(index: Int): LinearLayout? = (rowsBox.getChildAt(index) as? HorizontalScrollView)?.getChildAt(0) as? LinearLayout
+    private fun firstTile(): View? = rowLines.firstNotNullOfOrNull { it.getChildAt(0)?.takeIf { v -> v.isFocusable } }
 
-    /** [Prefs.rowCount] rows, each at its own size; "All apps" and the settings close the last one. */
+    /** One band per row: its title, then its glass with the tiles; "All apps" and the settings close the last one. */
     private fun buildRows(focusPackage: String? = null) {
         val focused = focusPackage ?: rowsBox.findFocus()?.tag as? String
         rowsBox.removeAllViews()
+        rowLines.clear()
         val byPackage = apps.associateBy { it.packageName }
         val rows = prefs.homeRows.map { row -> row.mapNotNull { byPackage[it] } }
         var toFocus: View? = null
         rows.forEachIndexed { r, row ->
-            val line = newRow()
+            val (line, name) = newBand(r)
             val width = tileWidth(r)
             row.forEach { app ->
-                val tile = appTile(app, width, rowImages)
+                val tile = appTile(app, width, rowImages, name)
                 tile.tag = app.packageName
                 tile.setOnClickListener { launch(app) }
                 tile.setOnLongClickListener { editFavourite(app); true }
@@ -324,7 +315,7 @@ class HomeActivity : Activity() {
                 if (app.packageName == focused) toFocus = tile
             }
             if (r == rows.size - 1) {
-                val allTile = Tiles.create(this, getString(R.string.all_apps)) { if (it) focusedLabel.text = getString(R.string.all_apps) }
+                val allTile = Tiles.create(this, getString(R.string.all_apps)) { name.text = if (it) getString(R.string.all_apps) else "" }
                 allTile.tag = ALL_APPS
                 allTile.setOnClickListener { openAllApps() }
                 allTile.setOnLongClickListener { openSettings(); true }
@@ -332,8 +323,8 @@ class HomeActivity : Activity() {
                 line.addView(allTile, tileParams(width))
                 if (focused == ALL_APPS) toFocus = allTile
 
-                // Settings: a narrow square-ish tile, it is not an app
-                val gear = Tiles.create(this, getString(R.string.settings_name)) { if (it) focusedLabel.text = getString(R.string.settings_name) }
+                // Settings: a square tile, it is not an app
+                val gear = Tiles.create(this, getString(R.string.settings_name)) { name.text = if (it) getString(R.string.settings_name) else "" }
                 gear.tag = SETTINGS
                 gear.setOnClickListener { openSettings() }
                 Tiles.fill(this, gear, "", null, getDrawable(R.drawable.ic_settings))
@@ -356,9 +347,12 @@ class HomeActivity : Activity() {
         (toFocus ?: firstTile())?.requestFocus()
     }
 
-    /** A tile whose picture is rendered on the worker thread, or taken from [cache] when it has it. */
-    private fun appTile(app: App, width: Int, cache: MutableMap<String, TileImage>?): FrameLayout {
-        val tile = Tiles.create(this, app.label) { if (it) focusedLabel.text = app.label }
+    /**
+     * A tile whose picture is rendered on the worker thread, or taken from [cache] when it has it.
+     * [name] shows the app's name while the tile has the focus (the band header).
+     */
+    private fun appTile(app: App, width: Int, cache: MutableMap<String, TileImage>?, name: TextView?): FrameLayout {
+        val tile = Tiles.create(this, app.label) { name?.text = if (it) app.label else "" }
         val key = "${app.packageName}@$width"
         val cached = cache?.get(key)
         if (cached != null) {
@@ -375,13 +369,38 @@ class HomeActivity : Activity() {
         return tile
     }
 
-    private fun newRow(): LinearLayout {
+    /** A row's band: header (title left, focused app name right), then its own glass and scroller. */
+    private fun newBand(r: Int): Pair<LinearLayout, TextView> {
+        val band = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; clipChildren = false; clipToPadding = false }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(Tiles.dp(context, 22), 0, Tiles.dp(context, 22), Tiles.dp(context, 6))
+        }
+        val title = prefs.rowTitle(r)
+        header.addView(TextView(this).apply {
+            text = title
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            setShadowLayer(8f, 0f, 1f, 0x99000000.toInt())
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        val name = TextView(this).apply {
+            setTextColor(0xCCFFFFFF.toInt())
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            setShadowLayer(8f, 0f, 1f, 0x99000000.toInt())
+        }
+        header.addView(name)
+        // No title: the band keeps the app name line, so the layout does not jump
+        band.addView(header)
+
+        val glassBox = FrameLayout(this).apply { clipChildren = false; clipToPadding = false }
+        glassBox.addView(GlassView(this), FrameLayout.LayoutParams(-1, -1))
         val line = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             clipChildren = false
             clipToPadding = false
             val h = Tiles.dp(context, 14)
-            val v = Tiles.dp(context, 8)
+            val v = Tiles.dp(context, 14)
             setPadding(h, v, h, v)
         }
         val scroller = HorizontalScrollView(this).apply {
@@ -395,9 +414,17 @@ class HomeActivity : Activity() {
             // Wrap height: the default params of a scroller child would fill the whole screen
             addView(line, FrameLayout.LayoutParams(-2, -2))
         }
-        rowsBox.addView(scroller, LinearLayout.LayoutParams(-1, -2))
-        return line
+        // match_parent width: with two stretched children FrameLayout sizes the glass to the scroller
+        glassBox.addView(scroller, FrameLayout.LayoutParams(-1, -2))
+        band.addView(glassBox, LinearLayout.LayoutParams(-1, -2))
+
+        rowsBox.addView(band, LinearLayout.LayoutParams(-1, -2).apply {
+            if (rowsBox.childCount > 0) topMargin = Tiles.dp(this@HomeActivity, 14)
+        })
+        rowLines += line
+        return line to name
     }
+
 
     private fun buildGrid() {
         gridDirty = false
@@ -408,7 +435,7 @@ class HomeActivity : Activity() {
         grid.columnCount = ((resources.displayMetrics.widthPixels - Tiles.dp(this, 96)) / (width + Tiles.dp(this, 2 * Tiles.MARGIN_DP))).coerceAtLeast(1)
         apps.forEach { app ->
             val star = if (app.packageName in favourites) "★ " else ""
-            val tile = appTile(app, width, null)
+            val tile = appTile(app, width, null, null)
             tile.contentDescription = star + app.label
             tile.setOnClickListener { closeAllApps(); launch(app) }
             tile.setOnLongClickListener { chooseRow(app); true }
