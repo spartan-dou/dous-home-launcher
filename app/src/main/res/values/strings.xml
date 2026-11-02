@@ -64,9 +64,6 @@
     <string name="empty_row">Rangée vide : appui long sur une appli pour l\'y déplacer</string>
     <string name="add_home">Ajouter à l\'accueil</string>
     <string name="add_to_row">Mettre sur la rangée %1$d</string>
-    <string name="status_wifi">Wi-Fi</string>
-    <string name="status_ethernet">Ethernet</string>
-    <string name="status_offline">Hors ligne</string>
     <string name="show_weather">Afficher la météo sous l\'heure (demain à partir de 18 h)</string>
     <string name="weather_place">Météo : %1$s</string>
     <string name="weather_auto">position de la box (adresse IP)</string>

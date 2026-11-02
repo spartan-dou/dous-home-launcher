@@ -93,20 +93,21 @@ class HomeActivity : Activity() {
         focusedLabel = findViewById(R.id.focused_label)
         allApps = findViewById(R.id.all_apps)
         grid = findViewById(R.id.grid)
-        status = StatusBar(this, findViewById(R.id.status_row))
+        status = StatusBar(this, findViewById(R.id.status_box))
 
         val slides = findViewById<FrameLayout>(R.id.slides)
-        val pill = Tiles.dp(this, 16).toFloat()
-        val captionGlass = findViewById<GlassView>(R.id.caption_glass).apply { cornerRadius = pill }
-        val statusGlass = findViewById<GlassView>(R.id.status_glass).apply { cornerRadius = pill }
         val allAppsGlass = findViewById<GlassView>(R.id.all_apps_glass).apply { cornerRadius = 0f; tint = 0x99000000.toInt() }
+        val glass = listOf<GlassView>(findViewById(R.id.dock_glass), allAppsGlass)
         wall = PhotoWall(this, listOf(slides.getChildAt(0) as FrameLayout, slides.getChildAt(1) as FrameLayout),
             findViewById(R.id.caption_box), findViewById(R.id.caption), findViewById(R.id.caption_date), prefs,
-            listOf(findViewById(R.id.dock_glass), captionGlass, statusGlass, allAppsGlass)) { blur ->
+            glass) { blur ->
             if (prefs.accent == Prefs.ACCENT_AUTO) Accent.set(Accent.fromPhoto(blur), animate = true)
         }
-        // Only the focused tile shows the accent: redraw it when the colour moves
-        Accent.onChange = { window.decorView.findFocus()?.invalidate() }
+        // The focused tile's frame and the glass (lightly tinted) follow the accent colour
+        Accent.onChange = {
+            window.decorView.findFocus()?.invalidate()
+            glass.forEach { it.invalidate() }
+        }
 
         registerReceiver(packageReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_PACKAGE_ADDED)
@@ -387,7 +388,10 @@ class HomeActivity : Activity() {
             isHorizontalScrollBarEnabled = false
             clipChildren = false
             clipToPadding = false
-            setFadingEdgeLength(0)
+            // Tiles past the edge fade out instead of being cut, and the scroll keeps the focused
+            // tile this far from the edge (the fading edge length is also the scroll margin)
+            isHorizontalFadingEdgeEnabled = true
+            setFadingEdgeLength(Tiles.dp(context, 56))
             // Wrap height: the default params of a scroller child would fill the whole screen
             addView(line, FrameLayout.LayoutParams(-2, -2))
         }

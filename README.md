@@ -31,7 +31,7 @@ Après 30 s sans toucher la télécommande, les applis s'effacent et seule la ph
 
 **Sous l'heure**, la météo du jour, ou celle du lendemain à partir de 18 h ([Open-Meteo](https://open-meteo.com), sans compte). La ville se choisit sur la page du téléphone ; laissée vide, c'est celle de l'adresse IP de la box ([ipwho.is](https://ipwho.is)). Une requête par heure au plus, seulement quand l'accueil est affiché.
 
-**En haut à droite**, une pastille avec la connexion (Wi-Fi ou Ethernet) et la RAM utilisée par la Shield, puis le lieu et la date de la photo. La charge du processeur et les piles de la télécommande ne sont pas lisibles par une appli sur la Shield (Android 8+ et service NVIDIA).
+**En haut à droite**, en icônes ombrées comme l'heure : la connexion (Wi-Fi ou Ethernet) et la RAM utilisée par la Shield, puis le lieu et la date de la photo. La charge du processeur et les piles de la télécommande ne sont pas lisibles par une appli sur la Shield (Android 8+ et service NVIDIA).
 
 **Mise en page**, dans *Réglages de l'accueil* :
 - applis en bas ou en haut de l'écran ;

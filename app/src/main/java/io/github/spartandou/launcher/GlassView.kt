@@ -23,7 +23,7 @@ class GlassView @JvmOverloads constructor(context: Context, attrs: AttributeSet?
 
     private val bitmapPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
     private val tintPaint = Paint().apply { color = 0x40000000 }
-    private val sheenPaint = Paint().apply { color = 0x14FFFFFF }
+    private val sheenPaint = Paint()
     private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = resources.displayMetrics.density
@@ -77,6 +77,8 @@ class GlassView @JvmOverloads constructor(context: Context, attrs: AttributeSet?
         previous?.takeIf { !it.isRecycled }?.let { drawAligned(canvas, it, 255) }
         current?.takeIf { !it.isRecycled }?.let { drawAligned(canvas, it, (mix * 255).toInt()) }
         canvas.drawRect(bounds, tintPaint)
+        // A light sheen in the accent colour, so the glass picks up the photo's tint
+        sheenPaint.color = (Accent.color and 0x00FFFFFF) or SHEEN_ALPHA
         canvas.drawRect(bounds, sheenPaint)
         canvas.restore()
         val half = strokePaint.strokeWidth / 2
@@ -92,5 +94,10 @@ class GlassView @JvmOverloads constructor(context: Context, attrs: AttributeSet?
         matrix.postTranslate((screenW - bitmap.width * scale) / 2 - location[0], (screenH - bitmap.height * scale) / 2 - location[1])
         bitmapPaint.alpha = alpha
         canvas.drawBitmap(bitmap, matrix, bitmapPaint)
+    }
+
+    companion object {
+        // ~14 %: a tint, not a colour fill
+        private const val SHEEN_ALPHA = 0x24000000
     }
 }
