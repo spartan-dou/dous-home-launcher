@@ -50,6 +50,7 @@ class SettingsActivity : Activity() {
         R.string.section_weather to ::weatherSection,
         R.string.section_display to ::display,
         R.string.section_rows to ::rows,
+        R.string.section_remote to ::remote,
         R.string.section_connection to ::connection,
     )
 
@@ -276,8 +277,10 @@ class SettingsActivity : Activity() {
             main.post {
                 if (isDestroyed || content.indexOfChild(box) < 0) return@post
                 if (publishers.isEmpty()) box.addView(hint(getString(R.string.continue_none)))
-                publishers.forEach { pkg ->
-                    val label = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() } catch (e: Exception) { pkg }
+                // By name, alphabetically
+                publishers.map { pkg ->
+                    pkg to try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() } catch (e: Exception) { pkg }
+                }.sortedWith(compareBy(frenchOrder) { it.second }).forEach { (pkg, label) ->
                     box.addView(check(label, pkg in row.apps) { checked ->
                         if (checked) row.apps += pkg else row.apps.remove(pkg)
                         save()
@@ -343,6 +346,28 @@ class SettingsActivity : Activity() {
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
         })
+    }
+
+    private fun remote() {
+        val labels = apps.orEmpty()
+        add(choice(getString(R.string.netflix_key), {
+            labels.firstOrNull { it.packageName == prefs.netflixKeyApp }?.label ?: getString(R.string.key_default)
+        }) { valueView ->
+            val choices = listOf(getString(R.string.key_default) to "") + labels.map { it.label to it.packageName }
+            val current = choices.indexOfFirst { it.second == prefs.netflixKeyApp }.coerceAtLeast(0)
+            AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle(R.string.netflix_key)
+                .setSingleChoiceItems(choices.map { it.first }.toTypedArray(), current) { dialog, which ->
+                    prefs.netflixKeyApp = choices[which].second
+                    valueView.text = choices[which].first
+                    dialog.dismiss()
+                }
+                .show()
+        })
+        // The button only works through the accessibility service, which the user turns on
+        val enabled = android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+            .orEmpty().contains("$packageName/")
+        add(hint(getString(if (enabled) R.string.key_service_on else R.string.key_service_off)))
     }
 
     private fun connection() {

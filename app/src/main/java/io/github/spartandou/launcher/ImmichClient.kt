@@ -29,7 +29,7 @@ class ImmichClient(private val baseUrl: String, private val apiKey: String) {
 
     fun albums(): List<Album> = (request("GET", "/api/albums") as JSONArray).objects()
         .mapNotNull { a -> a.text("id")?.let { Album(it, a.text("albumName") ?: "?", a.optInt("assetCount")) } }
-        .sortedBy { it.name.lowercase() }
+        .sortedWith(compareBy(frenchOrder) { it.name })
 
     fun albumPhotos(albumId: String, max: Int): List<Photo> {
         val photos = mutableListOf<Photo>()

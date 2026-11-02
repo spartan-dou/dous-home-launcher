@@ -180,6 +180,8 @@ class HomeActivity : Activity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // The Netflix button is the accessibility service's; reaching here it must not act as OK
+        if (event.keyCode == KeyEvent.KEYCODE_BUTTON_12) return true
         if (event.action == KeyEvent.ACTION_DOWN) {
             if (uiHidden) {
                 // The first key only brings the apps back, it never launches anything

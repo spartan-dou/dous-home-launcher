@@ -87,6 +87,11 @@ class Prefs(context: Context) {
         get() = prefs.getBoolean("pinned_top", true)
         set(value) = prefs.edit().putBoolean("pinned_top", value).apply()
 
+    /** App opened by the remote's Netflix button; empty: the button does what the system does. */
+    var netflixKeyApp: String
+        get() = prefs.getString("netflix_key_app", "")!!
+        set(value) = prefs.edit().putString("netflix_key_app", value).apply()
+
     var clockSize: Int
         get() = prefs.getInt("clock_size", 1).coerceIn(CLOCK_SIZES.indices)
         set(value) = prefs.edit().putInt("clock_size", value).apply()

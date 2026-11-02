@@ -132,6 +132,14 @@
         <item>en bas</item>
     </string-array>
 
+    <!-- Remote -->
+    <string name="section_remote">Télécommande</string>
+    <string name="netflix_key">Touche Netflix</string>
+    <string name="key_default">comportement normal</string>
+    <string name="key_service_on">La touche fonctionne partout, même dans les autres applis.</string>
+    <string name="key_service_off">Service inactif : activez « Dou\'s Home Launcher » dans Paramètres de la Shield → Accessibilité.</string>
+    <string name="key_service_description">Ouvre l\'appli choisie avec la touche Netflix de la télécommande. Ne lit ni l\'écran ni le texte saisi.</string>
+
     <!-- Connection -->
     <string name="scan_qr_url">Scannez avec le téléphone, ou ouvrez\n%1$s</string>
     <string name="no_network">Pas de réseau local : impossible d\'afficher le QR code</string>

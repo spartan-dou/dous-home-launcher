@@ -28,7 +28,7 @@ object Apps {
             .map { it.activityInfo }
             .distinctBy { it.packageName }
             .map { App(it.packageName, it.loadLabel(pm).toString(), it) }
-            .sortedBy { it.label.lowercase() }
+            .sortedWith(compareBy(frenchOrder) { it.label })
     }
 
     /**
@@ -49,4 +49,9 @@ object Apps {
         drawable.draw(Canvas(bitmap))
         return BitmapDrawable(context.resources, bitmap)
     }
+}
+
+/** Alphabetical order as a French reader expects it: accents and capitals do not count. */
+val frenchOrder: java.text.Collator = java.text.Collator.getInstance(java.util.Locale.FRENCH).apply {
+    strength = java.text.Collator.PRIMARY
 }
