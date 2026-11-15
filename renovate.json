@@ -1,0 +1,22 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "enabledManagers": ["gradle", "gradle-wrapper", "github-actions"],
+  "timezone": "Europe/Paris",
+  "schedule": ["before 6am on monday"],
+  "minimumReleaseAge": "7 days",
+  "prConcurrentLimit": 5,
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "The two actions move together: one pull request for both",
+      "matchManagers": ["github-actions"],
+      "groupName": "actions GitHub"
+    },
+    {
+      "description": "Gradle and the Android Gradle plugin depend on each other: one pull request for both",
+      "matchPackageNames": ["gradle", "com.android.application", "com.android.application:com.android.application.gradle.plugin"],
+      "groupName": "Gradle et plugin Android"
+    }
+  ]
+}

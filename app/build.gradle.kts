@@ -54,6 +54,6 @@ android {
 
 dependencies {
     // QR code for the phone set-up, only loaded on the settings screen
-    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.google.zxing:core:3.5.4")
     testImplementation("junit:junit:4.13.2")
 }
