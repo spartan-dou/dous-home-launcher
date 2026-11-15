@@ -9,6 +9,8 @@ import android.provider.Settings
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.DigestInputStream
+import java.security.MessageDigest
 import java.util.concurrent.Executors
 
 /**
@@ -28,7 +30,7 @@ object Updater {
     }
 
     /** A release tag and the APK to download. */
-    class Release(val code: Int, val name: String, val apkUrl: String)
+    class Release(val code: Int, val name: String, val apkUrl: String, val sha256: String)
 
     /** "v1.42" gives 42; null for any other tag. */
     fun parseTag(tag: String): Int? = Regex("""^v?\d+\.(\d+)$""").find(tag.trim())?.groupValues?.get(1)?.toIntOrNull()
@@ -41,7 +43,10 @@ object Updater {
         for (i in 0 until assets.length()) {
             val asset = assets.getJSONObject(i)
             if (asset.optString("name").endsWith(".apk")) {
-                return Release(code, tag, asset.getString("browser_download_url"))
+                // GitHub computes the digest of every asset: "sha256:<hex>". No digest, no update
+                val sha256 = asset.optString("digest").removePrefix("sha256:").lowercase()
+                if (!Regex("[0-9a-f]{64}").matches(sha256)) return null
+                return Release(code, tag, asset.getString("browser_download_url"), sha256)
             }
         }
         return null
@@ -100,11 +105,18 @@ object Updater {
         params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
         val id = installer.createSession(params)
         installer.openSession(id).use { session ->
-            get(release.apkUrl).use { input ->
+            val digest = MessageDigest.getInstance("SHA-256")
+            DigestInputStream(get(release.apkUrl), digest).use { input ->
                 session.openWrite("update.apk", 0, -1).use { out ->
                     input.copyTo(out)
                     session.fsync(out)
                 }
+            }
+            // The file must be the one GitHub announced, otherwise nothing is installed
+            val actual = digest.digest().joinToString("") { "%02x".format(it) }
+            if (actual != release.sha256) {
+                session.abandon()
+                throw java.io.IOException("SHA-256 mismatch")
             }
             val intent = Intent(ACTION).setPackage(context.packageName)
             val pending = PendingIntent.getBroadcast(
