@@ -150,6 +150,7 @@ class HomeActivity : Activity() {
         }
         if (appsDirty) loadApps()
         loadPrograms()
+        loadInputs()
     }
 
     override fun onResume() {
@@ -374,6 +375,7 @@ class HomeActivity : Activity() {
 
     // "Continue watching" entries and their tile pictures
     private var programs: List<Program> = emptyList()
+    private var inputs: List<TvInput> = emptyList()
     private val programImages = HashMap<Long, android.graphics.drawable.Drawable>()
 
     private fun firstTile(): View? = rowLines.firstNotNullOfOrNull { it.getChildAt(0)?.takeIf { v -> v.isFocusable } }
@@ -392,7 +394,11 @@ class HomeActivity : Activity() {
         val byPackage = apps.associateBy { it.packageName }
         // What each row shows: its installed apps, or its programs
         val shown = prefs.appRows.orEmpty().map { row ->
-            row to if (row.continueWatching) programsFor(row) else row.apps.mapNotNull { byPackage[it] }
+            row to when {
+                row.continueWatching -> programsFor(row)
+                row.inputs -> inputs
+                else -> row.apps.mapNotNull { byPackage[it] }
+            }
         }.filter { it.second.isNotEmpty() }
         // Nothing at all: one empty band still carries the round buttons
         val rows = shown.ifEmpty { listOf(AppRow("", 2, mutableListOf()) to emptyList()) }
@@ -405,7 +411,7 @@ class HomeActivity : Activity() {
         shownRows = others.size
         rowOffset = rowOffset.coerceIn(0, others.size - window)
         // A focused app on a hidden row brings its row into view
-        others.indexOfFirst { (row, _) -> !row.continueWatching && focused in row.apps }.takeIf { it >= 0 }?.let { r ->
+        others.indexOfFirst { (row, _) -> row.isApps && focused in row.apps }.takeIf { it >= 0 }?.let { r ->
             if (r < rowOffset) rowOffset = r else if (r >= rowOffset + window) rowOffset = r - window + 1
         }
         // Bands top to bottom: the pinned one first or last, the scrolling window in between
@@ -432,6 +438,7 @@ class HomeActivity : Activity() {
                         setOnLongClickListener { editFavourite(item); true }
                     }
                     is Program -> programTile(item, width, name, zoom = !carousel)
+                    is TvInput -> inputTile(item, name, zoom = !carousel)
                     else -> return@forEach
                 }
                 line.addView(tile, tileParams(width))
@@ -449,6 +456,38 @@ class HomeActivity : Activity() {
         }
         if (focused == ALL_APPS || focused == SETTINGS) toFocus = rowsBox.findViewWithTag(focused)
         (toFocus ?: firstTile())?.requestFocus()
+    }
+
+    /** An HDMI socket or a tuner: its icon and name, opened in the system's TV app. */
+    private fun inputTile(input: TvInput, name: TileName, zoom: Boolean): FrameLayout {
+        val tile = Tiles.create(this, input.label, zoom) {
+            name.show(currentFocus, if (it) input.label else null)
+            if (it && !zoom) arrangeCarousel()
+        }
+        tile.tag = "input:${input.id}"
+        Tiles.fill(this, tile, input.label, null, Inputs.icon(this, input.id) ?: getDrawable(R.drawable.ic_input))
+        tile.setOnClickListener {
+            try {
+                startActivity(input.intent())
+            } catch (e: Exception) {
+                Log.w(TAG, "Cannot open ${input.label}", e)
+                Toast.makeText(this, e.message, Toast.LENGTH_SHORT).show()
+            }
+        }
+        return tile
+    }
+
+    // Read again each time the home screen comes back: a tuner app may have been added
+    private fun loadInputs() {
+        if (prefs.appRows.orEmpty().none { it.inputs }) return
+        worker.execute {
+            val loaded = Inputs.load(this)
+            main.post {
+                if (loaded == inputs) return@post
+                inputs = loaded
+                if (apps.isNotEmpty()) buildRows()
+            }
+        }
     }
 
     private fun programsFor(row: AppRow) = programs.filter { row.apps.isEmpty() || it.packageName in row.apps }
@@ -857,10 +896,11 @@ class HomeActivity : Activity() {
         gridDirty = false
         grid.removeAllViews()
         val favourites = prefs.favourites
+        val hidden = prefs.hiddenApps
         val width = gridTileWidth()
         // As many columns as fit the screen
         grid.columnCount = ((resources.displayMetrics.widthPixels - Tiles.dp(this, 96)) / (width + Tiles.dp(this, 2 * Tiles.MARGIN_DP))).coerceAtLeast(1)
-        apps.forEach { app ->
+        apps.filter { it.packageName !in hidden }.forEach { app ->
             val star = if (app.packageName in favourites) "★ " else ""
             val tile = appTile(app, width, null, null)
             tile.contentDescription = star + app.label
@@ -897,19 +937,43 @@ class HomeActivity : Activity() {
     /** From "all apps": put the app on a row (one choice per row, by title), or take it off the home screen. */
     private fun chooseRow(app: App) {
         val rows = prefs.appRows.orEmpty().toMutableList().ifEmpty { mutableListOf(AppRow("", 2, mutableListOf())) }
-        val current = rows.indexOfFirst { !it.continueWatching && app.packageName in it.apps }
+        val current = rows.indexOfFirst { it.isApps && app.packageName in it.apps }
         val actions = mutableListOf<Pair<String, () -> Unit>>()
-        // Only app rows: a "continue watching" row lists programs
-        val appRows = rows.indices.filter { !rows[it].continueWatching }
+        // Only app rows: the other kinds do not list apps
+        val appRows = rows.indices.filter { rows[it].isApps }
         appRows.filter { it != current }.forEach { r ->
             val label = if (appRows.size == 1) getString(R.string.add_home) else getString(R.string.add_to_row, rowName(rows[r], r))
             actions += label to { appRows.forEach { rows[it].apps.remove(app.packageName) }; rows[r].apps += app.packageName }
         }
         if (current >= 0) actions += getString(R.string.remove) to { rows[current].apps.remove(app.packageName) }
+        // About the app itself, not its place on the home screen
+        val packageUri = android.net.Uri.parse("package:${app.packageName}")
+        val manage = listOf<Pair<String, () -> Unit>>(
+            getString(R.string.app_info) to {
+                startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri))
+            },
+            // The system asks for confirmation; the list follows once the app is gone
+            getString(R.string.app_uninstall) to { startActivity(Intent(Intent.ACTION_DELETE, packageUri)) },
+            getString(R.string.app_hide) to {
+                prefs.hiddenApps = prefs.hiddenApps + app.packageName
+                Toast.makeText(this, getString(R.string.app_hidden, app.label), Toast.LENGTH_LONG).show()
+                buildGrid()
+                grid.getChildAt(0)?.requestFocus()
+            },
+        )
 
         AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle(app.label)
-            .setItems(actions.map { it.first }.toTypedArray()) { _, which ->
+            .setItems((actions + manage).map { it.first }.toTypedArray()) { _, which ->
+                if (which >= actions.size) {
+                    try {
+                        manage[which - actions.size].second()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Cannot manage ${app.packageName}", e)
+                        Toast.makeText(this, e.message, Toast.LENGTH_SHORT).show()
+                    }
+                    return@setItems
+                }
                 actions[which].second()
                 prefs.appRows = rows
                 val onHome = rows.any { app.packageName in it.apps }
@@ -922,7 +986,7 @@ class HomeActivity : Activity() {
 
     private fun editFavourite(app: App) {
         val rows = prefs.appRows.orEmpty()
-        val r = rows.indexOfFirst { !it.continueWatching && app.packageName in it.apps }
+        val r = rows.indexOfFirst { it.isApps && app.packageName in it.apps }
         if (r < 0) return
         val apps = rows[r].apps
         val i = apps.indexOf(app.packageName)
@@ -931,7 +995,7 @@ class HomeActivity : Activity() {
         if (i > 0) actions += getString(R.string.move_left) to { apps.add(i - 1, apps.removeAt(i)) }
         if (i < apps.size - 1) actions += getString(R.string.move_right) to { apps.add(i + 1, apps.removeAt(i)) }
         // Any other row, hidden ones included: the moved app brings its new row into view
-        rows.indices.filter { it != r && !rows[it].continueWatching }.forEach { other ->
+        rows.indices.filter { it != r && rows[it].isApps }.forEach { other ->
             actions += getString(R.string.move_to_row, rowName(rows[other], other)) to { apps.removeAt(i); rows[other].apps += app.packageName }
         }
         actions += getString(R.string.remove) to { apps.removeAt(i) }

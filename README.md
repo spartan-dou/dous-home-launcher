@@ -20,7 +20,7 @@ Connexion depuis le téléphone : *Réglages de l'accueil* affiche un QR code. L
 |---|---|---|
 | Rangée d'accueil | OK | Ouvre l'appli |
 | Rangée d'accueil | Appui long sur OK | Déplacer à gauche ou à droite, vers la rangée du dessus ou du dessous, retirer |
-| Toutes les applis | Appui long sur OK | Mettre sur une rangée, ou retirer de l'accueil |
+| Toutes les applis | Appui long sur OK | Mettre sur une rangée, retirer de l'accueil, infos sur l'appli, désinstaller, masquer de la liste |
 | « Toutes les applis » de l'accueil | Appui long sur OK | Ouvre les réglages |
 | Partout | Appui long sur Menu | Ouvre les réglages |
 | Partout | Accueil | Revient à la première appli |
@@ -49,12 +49,22 @@ Navigation : haut depuis la première rangée atteint « Toutes les applis » et
 
 **Mémoire mesurée** (Shield 2019, 2 Go) : ~111 Mo accueil affiché, ~37 Mo pendant un film, dont environ 50 Mo à l'écran imposés par la pile graphique de la Shield à toute appli affichée.
 
+**Entrées** : une rangée spéciale de plus, pour les entrées que le système connaît (HDMI, tuners), ouvertes dans l'appli TV du système. Elle ne s'affiche que s'il y en a ; une box comme la Shield n'en a généralement pas.
+
+**Applis masquées** : une appli masquée depuis « Toutes les applis » se retrouve dans *Réglages → Rangées → Applis masquées*.
+
+**Télécommande** : *Réglages → Télécommande → Associer une touche* attend un appui sur la touche voulue, puis propose l'appui court, l'appui long ou le double appui, et l'appli à ouvrir. Une même touche peut ainsi ouvrir jusqu'à trois applis. Une touche associée ne fait plus ce qu'elle faisait à l'origine. Demande d'activer le service d'accessibilité « Dou's Home Launcher ».
+
+**Depuis le téléphone** (QR code de *Connexion Immich*, affiché tant que cette section est ouverte) :
+- *Rangées de l'accueil* : titre, taille et place de chaque rangée, ordre des applis, ajout et retrait ;
+- *Sauvegarde et restauration* : télécharge la configuration (rangées, mise en page, albums, touches) dans un fichier, et la restaure après une réinstallation ou sur un autre appareil. Les clés (Immich, cadre photo) n'y figurent pas.
+
 ## Cadre photo
 
 Les mêmes photos en plein écran, avec l'heure, la météo, le lieu et la date : de quoi remplacer ImmichFrame, sans serveur ni navigateur.
 
 - **Sur la TV** : c'est un économiseur d'écran (« Cadre photo », à choisir dans *Paramètres → Préférences relatives à l'appareil → Économiseur d'écran*). Android le lance et l'arrête ; la première touche revient à ce qui était affiché.
-- **Sur une tablette** : c'est l'appli « Cadre photo ». Elle garde l'écran allumé tant qu'elle est affichée. Un toucher fait apparaître les boutons (précédente, pause, suivante, réglages, fermer), un glissement change de photo.
+- **Sur une tablette** : c'est l'appli « Cadre photo », la seule partie visible (l'accueil TV et le service de la télécommande se désactivent d'eux-mêmes hors d'une Android TV, et les réglages n'affichent que ce qui concerne le cadre). Elle garde l'écran allumé tant qu'elle est affichée. Un toucher fait apparaître les boutons (précédente, pause, suivante, réglages, fermer), un glissement change de photo.
 
 Dans les deux cas, rien ne tourne quand le cadre n'est pas à l'écran.
 

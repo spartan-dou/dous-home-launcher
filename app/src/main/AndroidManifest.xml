@@ -7,6 +7,8 @@
     <!-- "Continue watching": the programs apps publish to the Android TV home screen -->
     <uses-permission android:name="android.permission.READ_TV_LISTINGS" />
     <uses-permission android:name="com.android.providers.tv.permission.READ_EPG_DATA" />
+    <!-- "Uninstall" in the menu of an app: only asks the system, which asks the user -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />

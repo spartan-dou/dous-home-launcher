@@ -23,10 +23,10 @@ class HttpTest {
         }
 
     /** What a client receives from [Http.respond]. */
-    private fun respond(status: Int, body: String, contentType: String): String =
+    private fun respond(status: Int, body: String, contentType: String, download: String? = null): String =
         ServerSocket(0, 1, InetAddress.getLoopbackAddress()).use { server ->
             Socket(server.inetAddress, server.localPort).use { client ->
-                server.accept().use { Http.respond(it, status, body, contentType) }
+                server.accept().use { Http.respond(it, status, body, contentType, download) }
                 client.getInputStream().readBytes().toString(Charsets.UTF_8)
             }
         }
@@ -67,6 +67,13 @@ class HttpTest {
         // Bytes, not characters: "é" takes two
         assertTrue(answer.contains("Content-Length: 8\r\n"))
         assertTrue(answer.endsWith("\r\n\r\n{\"é\":1}"))
+    }
+
+    @Test
+    fun downloadIsSavedUnderItsName() {
+        val answer = respond(200, "{}", "application/json", download = "config.json")
+
+        assertTrue(answer.contains("Content-Disposition: attachment; filename=\"config.json\"\r\n"))
     }
 
     @Test

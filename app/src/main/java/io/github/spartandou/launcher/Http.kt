@@ -33,10 +33,18 @@ object Http {
         return Request(parts.getOrNull(0).orEmpty(), parts.getOrNull(1).orEmpty().substringBefore('?'), headers, body)
     }
 
-    fun respond(client: Socket, status: Int, body: String = "", contentType: String = "text/html; charset=utf-8") {
+    /** [download]: the name of the file the browser saves the body as, instead of showing it. */
+    fun respond(
+        client: Socket,
+        status: Int,
+        body: String = "",
+        contentType: String = "text/html; charset=utf-8",
+        download: String? = null,
+    ) {
         val bytes = body.toByteArray(Charsets.UTF_8)
         val head = "HTTP/1.1 $status ${STATUS_TEXT[status] ?: "OK"}\r\n" +
             (if (status == 204) "" else "Content-Type: $contentType\r\n") +
+            (download?.let { "Content-Disposition: attachment; filename=\"$it\"\r\n" } ?: "") +
             "Content-Length: ${bytes.size}\r\n" +
             "Cache-Control: no-store\r\n" +
             "Referrer-Policy: no-referrer\r\n" +

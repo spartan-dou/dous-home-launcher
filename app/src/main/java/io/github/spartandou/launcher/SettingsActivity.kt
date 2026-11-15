@@ -3,6 +3,7 @@ package io.github.spartandou.launcher
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Typeface
@@ -15,6 +16,7 @@ import android.text.InputType
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.CheckBox
@@ -51,17 +53,21 @@ class SettingsActivity : Activity() {
     private var apps: List<App>? = null
     private var rendering = false
 
-    private val sections = listOf(
-        R.string.section_photos to ::photos,
-        R.string.section_albums to ::albums,
-        R.string.section_weather to ::weatherSection,
-        R.string.section_display to ::display,
-        R.string.section_rows to ::rows,
-        R.string.section_news to ::newsSection,
-        R.string.section_remote to ::remote,
-        R.string.section_frame to ::frameSection,
-        R.string.section_connection to ::connection,
-    )
+    // Away from a TV (a tablet used as a photo frame), what belongs to the home screen is left out
+    private val sections by lazy {
+        val tv = packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+        listOfNotNull(
+            R.string.section_photos to ::photos,
+            R.string.section_albums to ::albums,
+            R.string.section_weather to ::weatherSection,
+            R.string.section_display to ::display,
+            (R.string.section_rows to ::rows).takeIf { tv },
+            (R.string.section_news to ::newsSection).takeIf { tv },
+            (R.string.section_remote to ::remote).takeIf { tv },
+            R.string.section_frame to ::frameSection,
+            R.string.section_connection to ::connection,
+        )
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -123,7 +129,7 @@ class SettingsActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         // Back from a row's page goes to the list of rows, not out of the settings
-        if (section == ROWS && editedRow >= 0) {
+        if (sections.getOrNull(section)?.first == R.string.section_rows && editedRow >= 0) {
             editedRow = -1
             refresh(focus = 1)
         } else {
@@ -257,6 +263,8 @@ class SettingsActivity : Activity() {
         rows.forEachIndexed { i, row ->
             val summary = if (row.continueWatching) {
                 getString(R.string.continue_summary) + " · " + sizes[row.size]
+            } else if (row.inputs) {
+                getString(R.string.inputs_title) + " · " + sizes[row.size]
             } else {
                 val installed = apps?.let { list -> row.apps.count { pkg -> list.any { it.packageName == pkg } } } ?: row.apps.size
                 resources.getQuantityString(R.plurals.app_count, installed, installed) + " · " + sizes[row.size]
@@ -276,7 +284,23 @@ class SettingsActivity : Activity() {
             editedRow = updated.lastIndex
             refresh(focus = 1)
         })
+        // The same for the TV's inputs; it only shows on a device that has some
+        if (rows.none { it.inputs }) add(action(getString(R.string.add_inputs_row)) {
+            val updated = rows + AppRow(getString(R.string.inputs_title), 1, mutableListOf(), inputs = true)
+            prefs.appRows = updated
+            editedRow = updated.lastIndex
+            refresh(focus = 1)
+        })
         add(hint(getString(R.string.rows_hint)))
+
+        val hidden = prefs.hiddenApps
+        if (hidden.isNotEmpty()) {
+            add(subheader(getString(R.string.hidden_apps)))
+            val labels = apps.orEmpty().associate { it.packageName to it.label }
+            hidden.sortedWith(compareBy(frenchOrder) { labels[it] ?: it }).forEach { pkg ->
+                add(choice(labels[pkg] ?: pkg, { getString(R.string.hidden_show) }) { prefs.hiddenApps = prefs.hiddenApps - pkg; refresh() })
+            }
+        }
     }
 
     /** The apps whose entries the "continue watching" row shows; none ticked means all of them. */
@@ -323,7 +347,7 @@ class SettingsActivity : Activity() {
         })
         add(hint(getString(R.string.pin_row_hint)))
 
-        if (row.continueWatching) continueSources(row) { save() } else {
+        if (row.continueWatching) continueSources(row) { save() } else if (row.inputs) add(hint(getString(R.string.inputs_hint))) else {
             add(subheader(getString(R.string.row_apps)))
             val labels = apps.orEmpty().associate { it.packageName to it.label }
             // Apps uninstalled since they were put on the row are left out (home skips them too)
@@ -333,7 +357,7 @@ class SettingsActivity : Activity() {
                     val actions = mutableListOf<Pair<String, () -> Unit>>()
                     if (i > 0) actions += getString(R.string.move_left) to { row.apps.add(i - 1, row.apps.removeAt(i)) }
                     if (i < row.apps.size - 1) actions += getString(R.string.move_right) to { row.apps.add(i + 1, row.apps.removeAt(i)) }
-                    rows.indices.filter { it != r && !rows[it].continueWatching }.forEach { other ->
+                    rows.indices.filter { it != r && rows[it].isApps }.forEach { other ->
                         actions += getString(R.string.move_to_row, rowName(rows[other], other)) to { row.apps.removeAt(i); rows[other].apps += pkg }
                     }
                     actions += getString(R.string.remove) to { row.apps.removeAt(i) }
@@ -344,7 +368,7 @@ class SettingsActivity : Activity() {
                 // Apps on another row move here; the ones already on this row are not offered
                 val candidates = apps.orEmpty().filter { it.packageName !in row.apps && it.packageName != packageName }
                 menu(getString(R.string.add_app), candidates.map { app ->
-                    app.label to { rows.filter { !it.continueWatching }.forEach { it.apps.remove(app.packageName) }; row.apps += app.packageName }
+                    app.label to { rows.filter { it.isApps }.forEach { it.apps.remove(app.packageName) }; row.apps += app.packageName }
                 }) { save(); refresh() }
             })
         }
@@ -362,25 +386,58 @@ class SettingsActivity : Activity() {
     }
 
     private fun remote() {
-        val labels = apps.orEmpty()
-        add(choice(getString(R.string.netflix_key), {
-            labels.firstOrNull { it.packageName == prefs.netflixKeyApp }?.label ?: getString(R.string.key_default)
-        }) { valueView ->
-            val choices = listOf(getString(R.string.key_default) to "") + labels.map { it.label to it.packageName }
-            val current = choices.indexOfFirst { it.second == prefs.netflixKeyApp }.coerceAtLeast(0)
-            AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle(R.string.netflix_key)
-                .setSingleChoiceItems(choices.map { it.first }.toTypedArray(), current) { dialog, which ->
-                    prefs.netflixKeyApp = choices[which].second
-                    valueView.text = choices[which].first
-                    dialog.dismiss()
-                }
-                .show()
+        val labels = apps.orEmpty().associate { it.packageName to it.label }
+        val gestures = array(R.array.key_gestures)
+        val mappings = prefs.keyMappings
+        mappings.forEach { mapping ->
+            add(choice("${keyName(mapping.keyCode)} · ${gestures[mapping.gesture]}", { labels[mapping.app] ?: mapping.app }) {
+                menu(keyName(mapping.keyCode), listOf(
+                    getString(R.string.key_change_app) to { chooseApp { app -> prefs.keyMappings = prefs.keyMappings.map { if (it == mapping) it.copy(app = app) else it }; refresh() } },
+                    getString(R.string.key_remove) to { prefs.keyMappings = prefs.keyMappings - mapping; refresh() },
+                )) {}
+            })
+        }
+        add(action(getString(R.string.key_add)) {
+            captureKey { keyCode ->
+                // The gestures this button does not have yet
+                val free = gestures.indices.filter { g -> mappings.none { it.keyCode == keyCode && it.gesture == g } }
+                menu(keyName(keyCode), free.map { g ->
+                    gestures[g] to { chooseApp { app -> prefs.keyMappings = prefs.keyMappings + KeyMapping(keyCode, g, app); refresh() } }
+                }) {}
+            }
         })
-        // The button only works through the accessibility service, which the user turns on
+        // The buttons only work through the accessibility service, which the user turns on
         val enabled = android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
             .orEmpty().contains("$packageName/")
         add(hint(getString(if (enabled) R.string.key_service_on else R.string.key_service_off)))
+        add(hint(getString(R.string.key_hint)))
+    }
+
+    private fun keyName(keyCode: Int) = if (keyCode == KeyMapping.NETFLIX) getString(R.string.netflix_key)
+    else getString(R.string.key_n, KeyEvent.keyCodeToString(keyCode).removePrefix("KEYCODE_").replace('_', ' '))
+
+    /** Waits for a button of the remote. The ones that move around and go back are not offered. */
+    private fun captureKey(onKey: (Int) -> Unit) {
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle(R.string.key_add)
+            .setMessage(R.string.key_press)
+            .setOnKeyListener { dialog, keyCode, event ->
+                when {
+                    keyCode == KeyEvent.KEYCODE_BACK -> false
+                    keyCode in NAVIGATION_KEYS -> true
+                    event.action != KeyEvent.ACTION_UP -> true
+                    else -> { dialog.dismiss(); onKey(keyCode); true }
+                }
+            }
+            .show()
+    }
+
+    private fun chooseApp(onApp: (String) -> Unit) {
+        val list = apps.orEmpty()
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle(R.string.key_choose_app)
+            .setItems(list.map { it.label }.toTypedArray()) { _, which -> onApp(list[which].packageName) }
+            .show()
     }
 
     /** The "new" panel: on or off, and the channels it takes its posters from. */
@@ -445,7 +502,7 @@ class SettingsActivity : Activity() {
 
     private fun startSetup() {
         if (setup != null) return
-        val server = SetupServer(prefs) { main.post { if (!isDestroyed && section == sections.lastIndex) refresh() } }
+        val server = SetupServer(prefs, { apps.orEmpty().map { it.packageName to it.label } }) { main.post { if (!isDestroyed && section == sections.lastIndex) refresh() } }
         setupUrl = try { server.start() } catch (e: Exception) { null }
         if (setupUrl != null) setup = server
     }
@@ -593,6 +650,9 @@ class SettingsActivity : Activity() {
     private fun dp(value: Int) = Tiles.dp(this, value)
 
     companion object {
-        private const val ROWS = 4
+        private val NAVIGATION_KEYS = setOf(
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_HOME,
+        )
     }
 }

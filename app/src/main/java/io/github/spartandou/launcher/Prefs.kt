@@ -115,7 +115,12 @@ class Prefs(context: Context) {
     }
 
     val favourites: Set<String>
-        get() = appRows.orEmpty().filter { !it.continueWatching }.flatMap { it.apps }.toSet()
+        get() = appRows.orEmpty().filter { it.isApps }.flatMap { it.apps }.toSet()
+
+    /** Apps left out of "all apps" (they stay on the rows they were put on). */
+    var hiddenApps: Set<String>
+        get() = prefs.getStringSet("hidden_apps", emptySet())!!
+        set(value) = prefs.edit().putStringSet("hidden_apps", value).apply()
 
     // Layout choices, all applied when the home screen comes back
     var dockOnTop: Boolean
@@ -132,10 +137,83 @@ class Prefs(context: Context) {
         get() = prefs.getBoolean("pinned_top", true)
         set(value) = prefs.edit().putBoolean("pinned_top", value).apply()
 
-    /** App opened by the remote's Netflix button; empty: the button does what the system does. */
-    var netflixKeyApp: String
-        get() = prefs.getString("netflix_key_app", "")!!
-        set(value) = prefs.edit().putString("netflix_key_app", value).apply()
+    /**
+     * Remote buttons that open an app, as stored: the key service compares this text to know when
+     * to read [keyMappings] again. Earlier versions only had the Netflix button, on a short press.
+     */
+    val keyMappingsRaw: String
+        get() = prefs.getString("key_mappings", null)
+            ?: prefs.getString("netflix_key_app", "")!!.takeIf { it.isNotEmpty() }
+                ?.let { JSONArray().put(KeyMapping(KeyMapping.NETFLIX, KeyMapping.SHORT, it).toJson()).toString() }
+            ?: "[]"
+
+    var keyMappings: List<KeyMapping>
+        get() = try {
+            val array = JSONArray(keyMappingsRaw)
+            (0 until array.length()).map { KeyMapping.fromJson(array.getJSONObject(it)) }
+        } catch (e: Exception) {
+            emptyList()
+        }
+        set(value) = prefs.edit().putString("key_mappings", JSONArray().apply { value.forEach { put(it.toJson()) } }.toString()).apply()
+
+    /** Everything but the secrets, to carry the set-up over a reinstall or to another device. */
+    fun exportJson(): JSONObject {
+        val settings = JSONObject()
+        prefs.all.forEach { (key, value) ->
+            if (key !in SECRETS && value != null) settings.put(key, if (value is Set<*>) JSONArray(value) else value)
+        }
+        return JSONObject().put(EXPORT_MARK, 1).put("settings", settings)
+    }
+
+    /**
+     * Takes over an export. Every setting is read back before it is kept: a value of the wrong
+     * kind would otherwise crash the home screen at each start. Throws, changing nothing, when the
+     * text is not an export or does not hold up.
+     */
+    fun importJson(json: JSONObject) {
+        require(json.has(EXPORT_MARK)) { "ce n'est pas une configuration exportée" }
+        val settings = json.getJSONObject("settings")
+        val before = prefs.all
+        val editor = prefs.edit()
+        settings.keys().forEach { key ->
+            if (key in SECRETS) return@forEach
+            when (val value = settings.get(key)) {
+                is Boolean -> editor.putBoolean(key, value)
+                is Int -> editor.putInt(key, value)
+                is String -> editor.putString(key, value)
+                is JSONArray -> editor.putStringSet(key, (0 until value.length()).mapTo(HashSet()) { value.getString(it) })
+            }
+        }
+        editor.commit()
+        try {
+            readAll()
+        } catch (e: Exception) {
+            restore(before)
+            throw IllegalArgumentException("un réglage n'a pas le bon format")
+        }
+    }
+
+    // Every getter once: a stored value of the wrong kind throws here rather than on the home screen
+    private fun readAll() {
+        layoutKey; sourceKey; intervalSeconds; showDate; showPlace; autoHide; drift; weatherCity
+        newsChannels; hiddenApps; keyMappings; visibleRows; favourites
+    }
+
+    private fun restore(values: Map<String, *>) {
+        val editor = prefs.edit().clear()
+        values.forEach { (key, value) ->
+            @Suppress("UNCHECKED_CAST")
+            when (value) {
+                is Boolean -> editor.putBoolean(key, value)
+                is Int -> editor.putInt(key, value)
+                is Long -> editor.putLong(key, value)
+                is Float -> editor.putFloat(key, value)
+                is String -> editor.putString(key, value)
+                is Set<*> -> editor.putStringSet(key, value as Set<String>)
+            }
+        }
+        editor.commit()
+    }
 
     /** The "new" panel on the right: one poster at a time from the chosen channels. */
     var showNews: Boolean
@@ -206,6 +284,9 @@ class Prefs(context: Context) {
 
         val INTERVALS = intArrayOf(10, 15, 30, 60, 120, 300)
         const val MAX_VISIBLE_ROWS = 3
+        private const val EXPORT_MARK = "dous_home_launcher"
+        // Never exported nor imported: they belong to this device
+        private val SECRETS = setOf("api_key", "api_key_enc", "frame_key", "device_id")
         // No 0/O, 1/I/L: read on a screen, typed on another
         private const val KEY_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
         private const val KEY_LENGTH = 8
@@ -235,7 +316,7 @@ class Prefs(context: Context) {
 /**
  * One row of the home screen: its title (empty: none), tile size and apps in order. A "continue
  * watching" row lists programs instead, and [apps] are then the apps they may come from (empty:
- * all of them).
+ * all of them). An "inputs" row lists what the TV can show from elsewhere (HDMI, tuners).
  */
 data class AppRow(
     var title: String,
@@ -244,12 +325,22 @@ data class AppRow(
     val continueWatching: Boolean = false,
     // Always on screen when two rows or more are visible; the others scroll past it
     var pinned: Boolean = false,
+    val inputs: Boolean = false,
 ) {
+    /** A row of apps, the only kind an app can be put on. */
+    val isApps: Boolean
+        get() = !continueWatching && !inputs
+
     fun toJson(): JSONObject = JSONObject().put("title", title).put("size", size).put("apps", JSONArray(apps))
-        .apply { if (continueWatching) put("type", TYPE_CONTINUE); if (pinned) put("pinned", true) }
+        .apply {
+            if (continueWatching) put("type", TYPE_CONTINUE)
+            if (inputs) put("type", TYPE_INPUTS)
+            if (pinned) put("pinned", true)
+        }
 
     companion object {
         private const val TYPE_CONTINUE = "continue"
+        private const val TYPE_INPUTS = "inputs"
 
         fun fromJson(o: JSONObject): AppRow {
             val apps = o.optJSONArray("apps")
@@ -259,7 +350,23 @@ data class AppRow(
                 (0 until (apps?.length() ?: 0)).map { apps!!.getString(it) }.toMutableList(),
                 o.optString("type") == TYPE_CONTINUE,
                 o.optBoolean("pinned"),
+                o.optString("type") == TYPE_INPUTS,
             )
         }
+    }
+}
+
+/** A remote button that opens an app: on a short press, a long one, or two in a row. */
+data class KeyMapping(val keyCode: Int, val gesture: Int, val app: String) {
+    fun toJson(): JSONObject = JSONObject().put("key", keyCode).put("gesture", gesture).put("app", app)
+
+    companion object {
+        const val SHORT = 0
+        const val LONG = 1
+        const val DOUBLE = 2
+        // The Shield remote's Netflix button
+        const val NETFLIX = android.view.KeyEvent.KEYCODE_BUTTON_12
+
+        fun fromJson(o: JSONObject) = KeyMapping(o.getInt("key"), o.optInt("gesture").coerceIn(SHORT, DOUBLE), o.getString("app"))
     }
 }

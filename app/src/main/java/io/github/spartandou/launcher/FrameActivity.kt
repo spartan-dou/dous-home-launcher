@@ -2,7 +2,9 @@ package io.github.spartandou.launcher
 
 import android.app.Activity
 import android.content.ComponentCallbacks2
+import android.content.ComponentName
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.WindowInsets
 import android.view.WindowInsetsController
@@ -18,9 +20,22 @@ class FrameActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        hideTvParts()
         setContentView(R.layout.frame)
         frame = Frame(this, findViewById(R.id.frame_root), touch = true, onClose = ::finish) {
             startActivity(Intent(this, SettingsActivity::class.java))
+        }
+    }
+
+    /**
+     * Away from a TV, the app is only a photo frame: its home screen is no longer offered as the
+     * device's launcher, nor its remote buttons service in the accessibility settings.
+     */
+    private fun hideTvParts() {
+        if (packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)) return
+        listOf(HomeActivity::class.java, KeyService::class.java).forEach { part ->
+            packageManager.setComponentEnabledSetting(
+                ComponentName(this, part), PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP)
         }
     }
 
