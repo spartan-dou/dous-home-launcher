@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Compact clock: the time, and beside it the date, the weather and the photo's place -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/clock_box"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="56dp"
+    android:layout_marginTop="32dp"
+    android:layout_marginEnd="56dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <TextClock
+        style="@style/ShadowText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="sans-serif-thin"
+        android:format12Hour="HH:mm"
+        android:format24Hour="HH:mm"
+        android:includeFontPadding="false"
+        android:letterSpacing="-0.02"
+        android:textSize="60sp" />
+
+    <LinearLayout
+        android:id="@+id/clock_details"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="18dp"
+        android:orientation="vertical">
+
+        <TextClock
+            style="@style/ShadowText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:alpha="0.9"
+            android:fontFamily="sans-serif-medium"
+            android:format12Hour="EEEE d MMMM"
+            android:format24Hour="EEEE d MMMM"
+            android:letterSpacing="0.16"
+            android:textAllCaps="true"
+            android:textSize="13sp" />
+
+        <!-- Today's weather, or tomorrow's in the evening, with a line icon -->
+        <TextView
+            android:id="@+id/weather"
+            style="@style/ShadowText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:drawablePadding="7dp"
+            android:fontFamily="sans-serif-light"
+            android:gravity="center_vertical"
+            android:textSize="15sp"
+            android:visibility="gone" />
+
+        <!-- Photo place and date, filled by the photo wall -->
+        <LinearLayout
+            android:id="@+id/caption_box"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:alpha="0"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_marginEnd="7dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/ic_place" />
+
+            <TextView
+                android:id="@+id/caption"
+                style="@style/ShadowText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:fontFamily="sans-serif-light"
+                android:maxWidth="380dp"
+                android:maxLines="1"
+                android:textSize="15sp" />
+
+            <TextView
+                android:id="@+id/caption_date"
+                style="@style/ShadowText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:alpha="0.7"
+                android:fontFamily="sans-serif-light"
+                android:maxLines="1"
+                android:textSize="15sp" />
+        </LinearLayout>
+
+        <!-- Values sent by Home Assistant, on the photo frame only -->
+        <TextView
+            android:id="@+id/sensors"
+            style="@style/ShadowText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:fontFamily="sans-serif-light"
+            android:maxLines="2"
+            android:maxWidth="560dp"
+            android:textSize="15sp"
+            android:visibility="gone" />
+    </LinearLayout>
+</LinearLayout>

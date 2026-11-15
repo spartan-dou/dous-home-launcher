@@ -25,7 +25,16 @@ class Weather(context: Context) {
     data class Line(val icon: Int, val text: String)
 
     /** The line to show, from the cache (no network). Null when there is nothing yet. */
-    fun line(): Line? {
+    fun line(): Line? = try {
+        cachedLine()
+    } catch (e: Exception) {
+        // A cache that cannot be read is dropped: read every few seconds on the main thread, it
+        // would otherwise take the home screen down at every start
+        cache.edit().clear().apply()
+        null
+    }
+
+    private fun cachedLine(): Line? {
         val json = cache.getString("forecast", null) ?: return null
         val daily = JSONObject(json).optJSONObject("daily") ?: return null
         val dates = daily.optJSONArray("time") ?: return null
@@ -58,8 +67,11 @@ class Weather(context: Context) {
             val place = if (city.isBlank()) placeFromIp() else geocode(city) ?: throw IOException("ville introuvable : $city")
             val url = "https://api.open-meteo.com/v1/forecast?latitude=${place.lat}&longitude=${place.lon}" +
                 "&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=2"
+            val forecast = get(url)
+            // Checked before it is kept: the cache outlives the app
+            if (JSONObject(forecast).getJSONObject("daily").getJSONArray("time").length() == 0) throw IOException("prévision vide")
             cache.edit()
-                .putString("forecast", get(url))
+                .putString("forecast", forecast)
                 .putString("place_key", city)
                 .putString("place_name", place.name)
                 .putLong("time", System.currentTimeMillis())

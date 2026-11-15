@@ -66,15 +66,38 @@ class PhotoWall(
     // Pictures replaced on screen, freed when the fade that covers them ends
     private val retired = mutableListOf<Bitmap>()
 
-    private val next = Runnable { showNext() }
+    // A paused wall still loads its first photo
+    private val next = Runnable { if (!paused || shownPhoto == null) showNext() }
+
+    /** The photo on screen, null for anything else (a message, a "continue watching" picture). */
+    var current: Photo? = null
+        private set
+
+    /** Paused: the photo stays until [skip], or until it is set back to false. */
+    var paused = false
+        set(value) {
+            field = value
+            if (!value && started && !media) schedule(prefs.intervalSeconds * 1000L)
+        }
+
+    /** Another photo at once: the next one, or the one before with a negative [step]. */
+    fun skip(step: Int = 1) {
+        if (!started || media) return
+        main.removeCallbacks(next)
+        showNext(step)
+    }
+
+    private fun schedule(delayMs: Long) {
+        main.removeCallbacks(next)
+        main.postDelayed(next, delayMs)
+    }
 
     fun start() {
         started = true
         // Back from another app: the last photo comes back from disk over its blurred copy
         val restoring = photoView(front).drawable == null && lastPhotoFile.exists()
         if (restoring) showLastPhoto()
-        main.removeCallbacks(next)
-        main.postDelayed(next, if (photoView(front).drawable == null && !restoring) 0 else prefs.intervalSeconds * 1000L)
+        schedule(if (photoView(front).drawable == null && !restoring) 0 else prefs.intervalSeconds * 1000L)
     }
 
     /**
@@ -98,7 +121,8 @@ class PhotoWall(
 
     /** Called when Android asks for memory back: the photos are dropped, the last one stays on disk. */
     fun release() {
-        GlassView.showAll(null, 0)
+        // Only when the glass still shows this wall's photo: another wall may have taken over
+        if (GlassView.shows(shownBlur)) GlassView.showAll(null, 0)
         slides.forEach { slide ->
             slide.animate().cancel()
             stopDrift(slide)
@@ -110,6 +134,12 @@ class PhotoWall(
         shownBlur = null
         recycleRetired()
         worker.execute { photos = emptyList(); listKey = "" }
+    }
+
+    /** For a wall that will not be started again: frees its photos and ends its thread. */
+    fun close() {
+        release()
+        worker.shutdown()
     }
 
     /**
@@ -141,11 +171,18 @@ class PhotoWall(
             val bytes = lastPhotoFile.readBytes()
             val bitmap = decode(bytes) ?: return@execute
             val blur = Blur.fromJpeg(bytes)
-            main.post { if (started && !media) display(bitmap, blur, bitmap.height > bitmap.width, null) else bitmap.recycle() }
+            main.post { if (started && !media) display(bitmap, blur, bitmap.height > bitmap.width, null) else drop(bitmap, blur) }
         }
-        if (started) main.postDelayed(next, prefs.intervalSeconds * 1000L)
+        if (started) schedule(prefs.intervalSeconds * 1000L)
     }
 
+
+    // A picture decoded for nothing (the home screen was left meanwhile): its graphics memory goes
+    // back at once
+    private fun drop(bitmap: Bitmap, blur: Bitmap?) {
+        bitmap.recycle()
+        blur?.recycle()
+    }
 
     private fun clear(slide: FrameLayout) =
         (0 until slide.childCount).forEach { (slide.getChildAt(it) as ImageView).setImageDrawable(null) }
@@ -157,17 +194,20 @@ class PhotoWall(
             val bytes = lastPhotoFile.readBytes()
             val bitmap = decode(bytes) ?: return@execute
             val blur = Blur.fromJpeg(bytes)
-            main.post { if (photoView(front).drawable == null) display(bitmap, blur, bitmap.height > bitmap.width, null) }
+            main.post {
+                if (started && !media && photoView(front).drawable == null) display(bitmap, blur, bitmap.height > bitmap.width, null)
+                else drop(bitmap, blur)
+            }
         }
     }
 
-    private fun showNext() {
+    private fun showNext(step: Int = 1) {
         if (!started || busy || media) return
         if (prefs.serverUrl.isBlank() || prefs.apiKey.isBlank()) {
             showMessage(context.getString(R.string.not_connected))
             return
         }
-        if (prefs.albumIds.isEmpty() && !prefs.memories) {
+        if (prefs.albumIds.isEmpty() && !prefs.memories && !prefs.memoriesOnly) {
             showMessage(context.getString(R.string.no_album))
             return
         }
@@ -176,13 +216,16 @@ class PhotoWall(
         val client = ImmichClient(prefs.serverUrl, prefs.apiKey)
         val albumIds = prefs.albumIds
         val memories = prefs.memories
+        val memoriesOnly = prefs.memoriesOnly
         worker.execute {
             var shown = false
             try {
-                ensureList(client, key, albumIds, memories)
+                ensureList(client, key, albumIds, memories, memoriesOnly)
                 if (photos.isEmpty()) {
                     main.post { showMessage(context.getString(R.string.no_photos)) }
                 } else {
+                    // index is the photo after the one on screen: two back for the one before it
+                    if (step < 0) index = (index - 2).mod(photos.size)
                     val photo = photos[index % photos.size]
                     index = (index + 1) % photos.size
                     val bytes = client.download(client.imageUrl(photo.id))
@@ -192,7 +235,7 @@ class PhotoWall(
                         val blur = Blur.fromJpeg(bytes)
                         lastPhotoFile.writeBytes(bytes)
                         shown = true
-                        main.post { if (started && !media) display(bitmap, blur, portrait, photo) }
+                        main.post { if (started && !media) display(bitmap, blur, portrait, photo) else drop(bitmap, blur) }
                     }
                 }
             } catch (e: Exception) {
@@ -205,27 +248,32 @@ class PhotoWall(
             }
             main.post {
                 busy = false
-                main.removeCallbacks(next)
                 // A failure is retried soon, a shown photo stays for the whole interval
-                if (started) main.postDelayed(next, if (shown) prefs.intervalSeconds * 1000L else RETRY_MS)
+                if (started) schedule(if (shown) prefs.intervalSeconds * 1000L else RETRY_MS)
             }
         }
     }
 
     /** Albums are re-read every few hours, memories every day; the list is kept on disk between starts. */
-    private fun ensureList(client: ImmichClient, key: String, albumIds: Set<String>, memories: Boolean) {
+    private fun ensureList(client: ImmichClient, key: String, albumIds: Set<String>, memories: Boolean, memoriesOnly: Boolean) {
         val today = SimpleDateFormat("yyyyMMdd", Locale.ROOT).format(Date())
         if (photos.isEmpty() && listFile.exists()) readList()
-        val fresh = listKey == key && System.currentTimeMillis() - listTime < LIST_TTL_MS && (!memories || listDay == today)
+        val fresh = listKey == key && System.currentTimeMillis() - listTime < LIST_TTL_MS && (!(memories || memoriesOnly) || listDay == today)
         if (fresh && photos.isNotEmpty()) return
 
-        val albumPhotos = albumIds.flatMap { client.albumPhotos(it, MAX_PER_ALBUM) }.distinctBy { it.id }.shuffled()
-            .take(MAX_PHOTOS)
-        val memoryPhotos = if (memories) client.todaysMemories() else emptyList()
-        // Memories are spread at random among the album photos
-        val mixed = albumPhotos.toMutableList()
-        val known = albumPhotos.mapTo(HashSet()) { it.id }
-        memoryPhotos.filter { known.add(it.id) }.forEach { mixed.add(Random.nextInt(mixed.size + 1), it) }
+        val memoryPhotos = if (memories || memoriesOnly) client.todaysMemories() else emptyList()
+        val mixed = if (memoriesOnly && memoryPhotos.isNotEmpty()) {
+            memoryPhotos.distinctBy { it.id }.shuffled().toMutableList()
+        } else {
+            // "Memories only" on a day without any: the albums as usual
+            val albumPhotos = albumIds.flatMap { client.albumPhotos(it, MAX_PER_ALBUM) }.distinctBy { it.id }.shuffled()
+                .take(MAX_PHOTOS)
+            // Memories are spread at random among the album photos
+            val known = albumPhotos.mapTo(HashSet()) { it.id }
+            albumPhotos.toMutableList().also { list ->
+                memoryPhotos.filter { known.add(it.id) }.forEach { list.add(Random.nextInt(list.size + 1), it) }
+            }
+        }
 
         photos = mixed
         index = 0
@@ -283,6 +331,7 @@ class PhotoWall(
             front = back
             recycleRetired()
         }.start()
+        current = photo
         updateCaption(photo)
     }
 
@@ -300,6 +349,7 @@ class PhotoWall(
     }
 
     private fun showMessage(text: String) {
+        current = null
         captionBox.animate().cancel()
         caption.text = text
         captionDate.visibility = View.GONE

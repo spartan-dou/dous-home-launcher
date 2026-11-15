@@ -147,8 +147,19 @@
     <!-- Remote -->
     <string name="section_remote">Télécommande</string>
     <string name="netflix_key">Touche Netflix</string>
-    <string name="key_default">comportement normal</string>
-    <string name="key_service_on">La touche fonctionne partout, même dans les autres applis.</string>
+    <string name="key_n">Touche %1$s</string>
+    <string-array name="key_gestures">
+        <item>appui court</item>
+        <item>appui long</item>
+        <item>double appui</item>
+    </string-array>
+    <string name="key_add">+ Associer une touche</string>
+    <string name="key_press">Appuyez sur la touche de la télécommande à associer.\nRetour pour annuler.</string>
+    <string name="key_choose_app">Appli à ouvrir</string>
+    <string name="key_change_app">Changer d\'appli</string>
+    <string name="key_remove">Supprimer l\'association</string>
+    <string name="key_hint">Une touche associée ne fait plus ce qu\'elle faisait à l\'origine : à réserver aux touches dont vous ne vous servez pas. Une touche déjà associée doit être supprimée ici avant de pouvoir être associée à nouveau.</string>
+    <string name="key_service_on">Les touches fonctionnent partout, même dans les autres applis.</string>
     <string name="key_service_off">Service inactif : activez « Dou\'s Home Launcher » dans Paramètres de la Shield → Accessibilité.</string>
     <string name="key_service_description">Ouvre l\'appli choisie avec la touche Netflix de la télécommande. Ne lit ni l\'écran ni le texte saisi.</string>
 
@@ -158,4 +169,32 @@
     <string name="connected_to">Connecté à %1$s</string>
     <string name="not_connected_yet">Immich n\'est pas encore connecté</string>
     <string name="connection_hint">Sur la page du téléphone : adresse du serveur, clé d\'API en lecture seule, albums et ville de la météo.</string>
+
+    <!-- Photo frame -->
+    <string name="frame_name">Cadre photo</string>
+    <string name="frame_previous">Photo précédente</string>
+    <string name="frame_next">Photo suivante</string>
+    <string name="frame_pause">Mettre en pause</string>
+    <string name="frame_resume">Reprendre le défilement</string>
+    <string name="frame_close">Fermer le cadre</string>
+    <string name="section_frame">Cadre photo</string>
+    <string name="frame_open">Afficher le cadre maintenant</string>
+    <string name="frame_how">Sur une tablette : l\'appli « Cadre photo ». Sur la TV : l\'économiseur d\'écran « Cadre photo », à choisir dans les paramètres Android.</string>
+    <string name="memories_only">Uniquement les souvenirs du jour, quand il y en a</string>
+    <string name="frame_ha">Home Assistant</string>
+    <string name="frame_ha_address">Adresse</string>
+    <string name="frame_ha_key">Clé</string>
+    <string name="frame_no_network">pas de réseau local</string>
+    <string name="frame_ha_hint">À saisir dans l\'intégration « Dou\'s Home Launcher » de Home Assistant : notifications, valeurs sous l\'heure, souvenirs, pause. Le cadre ne répond que lorsqu\'il est affiché.</string>
+
+    <!-- Apps menu, inputs row -->
+    <string name="app_info">Infos sur l\'appli</string>
+    <string name="app_uninstall">Désinstaller</string>
+    <string name="app_hide">Masquer de « Toutes les applis »</string>
+    <string name="app_hidden">%1$s est masquée. Pour la retrouver : Réglages → Rangées → Applis masquées.</string>
+    <string name="hidden_apps">Applis masquées</string>
+    <string name="hidden_show">afficher à nouveau</string>
+    <string name="inputs_title">Entrées</string>
+    <string name="add_inputs_row">+ Ajouter la rangée « Entrées »</string>
+    <string name="inputs_hint">Les entrées que le système connaît (HDMI, tuners). La rangée ne s\'affiche que s\'il y en a : une box comme la Shield n\'en a généralement pas.</string>
 </resources>
