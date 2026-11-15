@@ -65,6 +65,7 @@ class SettingsActivity : Activity() {
             (R.string.section_news to ::newsSection).takeIf { tv },
             (R.string.section_remote to ::remote).takeIf { tv },
             R.string.section_frame to ::frameSection,
+            R.string.section_update to ::updateSection,
             R.string.section_connection to ::connection,
         )
     }
@@ -470,6 +471,31 @@ class SettingsActivity : Activity() {
         packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
     } catch (e: Exception) {
         pkg
+    }
+
+    private fun updateSection() {
+        add(text(getString(R.string.update_current, Updater.installedName(this)), 17f))
+        add(check(getString(R.string.update_auto), prefs.autoUpdate) { prefs.autoUpdate = it })
+        val status = hint("")
+        add(action(getString(R.string.update_check)) {
+            if (!Updater.canInstall(this)) {
+                status.text = getString(R.string.update_allow)
+                Updater.openInstallSettings(this)
+                return@action
+            }
+            status.text = getString(R.string.update_checking)
+            Updater.check(this, force = true) { result ->
+                main.post {
+                    status.text = when (result) {
+                        is Updater.Result.Available -> getString(R.string.update_available, result.name)
+                        Updater.Result.UpToDate -> getString(R.string.update_up_to_date)
+                        Updater.Result.Failed -> getString(R.string.update_failed)
+                    }
+                }
+            }
+        })
+        add(status)
+        add(hint(getString(R.string.update_hint)))
     }
 
     private fun frameSection() {
