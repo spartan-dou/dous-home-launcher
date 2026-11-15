@@ -1,6 +1,7 @@
 name: Release
 
-# Signed APK on every push to main, once the checks pass, published as a GitHub Release (for Obtainium)
+# Signed APK on every push to main, once the checks pass, published as a GitHub Release numbered v1.<run>
+# (the app updates itself from the latest one, see Updater.kt; Obtainium works too)
 on:
   push:
     branches: [main]
@@ -39,8 +40,8 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew :app:assembleRelease
-          mv app/build/outputs/apk/release/app-release.apk "DousHomeLauncher-${GITHUB_SHA::7}.apk"
+          mv app/build/outputs/apk/release/app-release.apk "DousHomeLauncher-v1.${GITHUB_RUN_NUMBER}.apk"
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "build-${GITHUB_SHA::7}" DousHomeLauncher-*.apk --title "build ${GITHUB_SHA::7}" --notes "$(git log -1 --pretty=%s)"
+        run: gh release create "v1.${GITHUB_RUN_NUMBER}" DousHomeLauncher-*.apk --target "$GITHUB_SHA" --latest --title "v1.${GITHUB_RUN_NUMBER}" --notes "$(git log -1 --pretty=%s)"

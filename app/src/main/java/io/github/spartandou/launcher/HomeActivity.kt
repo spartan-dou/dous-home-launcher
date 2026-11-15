@@ -91,6 +91,8 @@ class HomeActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_home)
         prefs = Prefs(this)
+        // Once a day at most, and only when the system already lets the launcher install
+        if (prefs.autoUpdate && Updater.canInstall(this)) Updater.check(this, force = false) {}
         weather = WeatherLine(findViewById(R.id.weather), prefs, network)
         // Posters and stills come back from disk instead of the network (the "new" panel shows
         // the same few in turn all day long)

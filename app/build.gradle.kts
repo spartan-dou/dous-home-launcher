@@ -56,4 +56,6 @@ dependencies {
     // QR code for the phone set-up, only loaded on the settings screen
     implementation("com.google.zxing:core:3.5.4")
     testImplementation("junit:junit:4.13.2")
+    // The android.jar of unit tests has stubbed org.json
+    testImplementation("org.json:json:20240303")
 }

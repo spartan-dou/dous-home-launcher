@@ -42,6 +42,16 @@ class Prefs(context: Context) {
                 .apply()
         }
 
+    /** Newer releases are downloaded and installed without being asked for. */
+    var autoUpdate: Boolean
+        get() = prefs.getBoolean("auto_update", true)
+        set(value) = prefs.edit().putBoolean("auto_update", value).apply()
+
+    /** When the releases were last looked at (ms), to do it once a day at most. */
+    var lastUpdateCheck: Long
+        get() = prefs.getLong("last_update_check", 0L)
+        set(value) = prefs.edit().putLong("last_update_check", value).apply()
+
     var albumIds: Set<String>
         get() = prefs.getStringSet("album_ids", emptySet())!!
         set(value) = prefs.edit().putStringSet("album_ids", value).apply()

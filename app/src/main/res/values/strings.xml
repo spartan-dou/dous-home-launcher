@@ -27,6 +27,7 @@
     <string name="section_albums">Albums</string>
     <string name="section_weather">Météo</string>
     <string name="section_display">Affichage</string>
+    <string name="section_update">Mises à jour</string>
     <string name="section_connection">Connexion Immich</string>
 
     <!-- Photos -->
@@ -186,6 +187,17 @@
     <string name="frame_ha_key">Clé</string>
     <string name="frame_no_network">pas de réseau local</string>
     <string name="frame_ha_hint">À saisir dans l\'intégration « Dou\'s Home Launcher » de Home Assistant : notifications, valeurs sous l\'heure, souvenirs, pause. Le cadre ne répond que lorsqu\'il est affiché.</string>
+
+    <!-- Updates -->
+    <string name="update_current">Version installée : %1$s</string>
+    <string name="update_auto">Installer automatiquement les nouvelles versions</string>
+    <string name="update_check">Rechercher une mise à jour</string>
+    <string name="update_checking">Recherche en cours…</string>
+    <string name="update_up_to_date">L\'appli est à jour.</string>
+    <string name="update_available">Version %1$s disponible, téléchargement…</string>
+    <string name="update_failed">Recherche impossible (pas de réseau ?).</string>
+    <string name="update_allow">Autorisez d\'abord l\'installation d\'applis depuis Réglages de l\'accueil, puis relancez la recherche.</string>
+    <string name="update_hint">Les versions sont publiées sur GitHub (spartan-dou/dous-home-launcher). La recherche se fait au plus une fois par jour.</string>
 
     <!-- Apps menu, inputs row -->
     <string name="app_info">Infos sur l\'appli</string>
