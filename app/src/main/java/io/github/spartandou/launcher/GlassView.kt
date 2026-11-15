@@ -122,6 +122,8 @@ class GlassView @JvmOverloads constructor(context: Context, attrs: AttributeSet?
             live.forEach { it.setBlur(bitmap, fadeMs) }
         }
 
+        fun shows(bitmap: Bitmap?) = shared === bitmap
+
         fun invalidateAll() = live.forEach { it.invalidate() }
     }
 }

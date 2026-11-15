@@ -158,4 +158,21 @@
     <string name="connected_to">Connecté à %1$s</string>
     <string name="not_connected_yet">Immich n\'est pas encore connecté</string>
     <string name="connection_hint">Sur la page du téléphone : adresse du serveur, clé d\'API en lecture seule, albums et ville de la météo.</string>
+
+    <!-- Photo frame -->
+    <string name="frame_name">Cadre photo</string>
+    <string name="frame_previous">Photo précédente</string>
+    <string name="frame_next">Photo suivante</string>
+    <string name="frame_pause">Mettre en pause</string>
+    <string name="frame_resume">Reprendre le défilement</string>
+    <string name="frame_close">Fermer le cadre</string>
+    <string name="section_frame">Cadre photo</string>
+    <string name="frame_open">Afficher le cadre maintenant</string>
+    <string name="frame_how">Sur une tablette : l\'appli « Cadre photo ». Sur la TV : l\'économiseur d\'écran « Cadre photo », à choisir dans les paramètres Android.</string>
+    <string name="memories_only">Uniquement les souvenirs du jour, quand il y en a</string>
+    <string name="frame_ha">Home Assistant</string>
+    <string name="frame_ha_address">Adresse</string>
+    <string name="frame_ha_key">Clé</string>
+    <string name="frame_no_network">pas de réseau local</string>
+    <string name="frame_ha_hint">À saisir dans l\'intégration « Dou\'s Home Launcher » de Home Assistant : notifications, valeurs sous l\'heure, souvenirs, pause. Le cadre ne répond que lorsqu\'il est affiché.</string>
 </resources>

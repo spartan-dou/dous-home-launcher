@@ -2,6 +2,7 @@ package io.github.spartandou.launcher
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Typeface
@@ -58,6 +59,7 @@ class SettingsActivity : Activity() {
         R.string.section_rows to ::rows,
         R.string.section_news to ::newsSection,
         R.string.section_remote to ::remote,
+        R.string.section_frame to ::frameSection,
         R.string.section_connection to ::connection,
     )
 
@@ -81,8 +83,8 @@ class SettingsActivity : Activity() {
             menuItem(getString(label)).also { item ->
                 // Not while a section is rebuilt: removing the focused line moves the focus to the menu
                 item.setOnFocusChangeListener { _, focused -> if (focused && !rendering) show(i) }
-                // OK on a section goes into it
-                item.setOnClickListener { content.requestFocus() }
+                // OK on a section goes into it; a finger shows it, as nothing gets the focus by touch
+                item.setOnClickListener { show(i); content.requestFocus() }
                 menu.addView(item)
             }
         }
@@ -105,7 +107,6 @@ class SettingsActivity : Activity() {
         root.addView(contentScroll, LinearLayout.LayoutParams(0, -1, 1f))
         setContentView(root)
 
-        startSetup()
         // Labels of the installed apps, for the rows section
         Thread { val loaded = Apps.load(this); main.post { apps = loaded } }.start()
         // Not connected yet: open on the connection section
@@ -114,9 +115,9 @@ class SettingsActivity : Activity() {
         show(start)
     }
 
-    override fun onDestroy() {
-        setup?.stop()
-        super.onDestroy()
+    override fun onStop() {
+        stopSetup()
+        super.onStop()
     }
 
     @Deprecated("Deprecated in Java")
@@ -134,6 +135,8 @@ class SettingsActivity : Activity() {
         if (i == section) return
         section = i
         editedRow = -1
+        // The phone page is only served while its QR code is on screen
+        if (i == sections.lastIndex) startSetup() else stopSetup()
         render()
         contentScroll.scrollTo(0, 0)
     }
@@ -176,6 +179,7 @@ class SettingsActivity : Activity() {
 
     private fun photos() {
         add(check(getString(R.string.memories), prefs.memories) { prefs.memories = it })
+        add(check(getString(R.string.memories_only), prefs.memoriesOnly) { prefs.memoriesOnly = it })
         val intervals = Prefs.INTERVALS.map { if (it < 60) "$it s" else "${it / 60} min" }.toTypedArray()
         add(pick(getString(R.string.interval_label), intervals, { Prefs.INTERVALS.indexOf(prefs.intervalSeconds) }) {
             prefs.intervalSeconds = Prefs.INTERVALS[it]
@@ -411,6 +415,16 @@ class SettingsActivity : Activity() {
         pkg
     }
 
+    private fun frameSection() {
+        add(action(getString(R.string.frame_open)) { startActivity(Intent(this, FrameActivity::class.java)) })
+        add(hint(getString(R.string.frame_how)))
+        add(subheader(getString(R.string.frame_ha)))
+        val address = Http.localIpv4Address()?.let { "http://$it:${FrameServer.PORT}" } ?: getString(R.string.frame_no_network)
+        add(text("${getString(R.string.frame_ha_address)} : $address", 17f).apply { setPadding(0, dp(12), 0, 0) })
+        add(text("${getString(R.string.frame_ha_key)} : ${prefs.frameKey}", 17f).apply { setPadding(0, dp(8), 0, 0) })
+        add(hint(getString(R.string.frame_ha_hint)))
+    }
+
     private fun connection() {
         val box = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         val url = setupUrl
@@ -430,9 +444,16 @@ class SettingsActivity : Activity() {
     // --- Actions ---
 
     private fun startSetup() {
-        val server = SetupServer(prefs) { main.post { if (section == sections.lastIndex || section == ALBUMS) refresh() } }
+        if (setup != null) return
+        val server = SetupServer(prefs) { main.post { if (!isDestroyed && section == sections.lastIndex) refresh() } }
         setupUrl = try { server.start() } catch (e: Exception) { null }
         if (setupUrl != null) setup = server
+    }
+
+    private fun stopSetup() {
+        setup?.stop()
+        setup = null
+        setupUrl = null
     }
 
     private fun editCity() = editText(getString(R.string.weather_city), prefs.weatherCity, getString(R.string.weather_city_input_hint)) { city ->
@@ -572,7 +593,6 @@ class SettingsActivity : Activity() {
     private fun dp(value: Int) = Tiles.dp(this, value)
 
     companion object {
-        private const val ALBUMS = 1
         private const val ROWS = 4
     }
 }

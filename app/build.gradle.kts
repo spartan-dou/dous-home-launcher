@@ -23,8 +23,10 @@ android {
         applicationId = "io.github.spartandou.launcher"
         minSdk = 30
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        // Each published build is newer than the one before: the CI run number; 1 on a developer machine
+        val build = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionCode = build
+        versionName = "1.$build"
     }
 
     // Same key as the Immich TV fork, read from the environment (never committed)
@@ -53,4 +55,5 @@ android {
 dependencies {
     // QR code for the phone set-up, only loaded on the settings screen
     implementation("com.google.zxing:core:3.5.3")
+    testImplementation("junit:junit:4.13.2")
 }

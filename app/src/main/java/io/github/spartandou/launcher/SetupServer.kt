@@ -1,12 +1,8 @@
 package io.github.spartandou.launcher
 
 import android.util.Log
-import java.io.BufferedInputStream
-import java.io.ByteArrayOutputStream
-import java.io.InputStream
-import java.net.Inet4Address
+import java.net.InetAddress
 import java.net.InetSocketAddress
-import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
@@ -29,10 +25,11 @@ class SetupServer(private val prefs: Prefs, private val onChanged: () -> Unit) {
 
     /** The URL for the QR code, or null without a local network. */
     fun start(): String? {
-        val address = localIpv4Address() ?: return null
+        val address = Http.localIpv4Address() ?: return null
         val socket = ServerSocket().apply {
             reuseAddress = true
-            bind(InetSocketAddress(PORT))
+            // Only where the QR code points, not on every interface
+            bind(InetSocketAddress(InetAddress.getByName(address), PORT))
         }
         serverSocket = socket
         thread(name = "setup-server", isDaemon = true) {
@@ -55,20 +52,11 @@ class SetupServer(private val prefs: Prefs, private val onChanged: () -> Unit) {
     }
 
     private fun handle(client: Socket) {
-        client.soTimeout = 10_000
-        val input = BufferedInputStream(client.getInputStream())
-        val requestLine = readLine(input) ?: return
-        val headers = generateSequence { readLine(input)?.takeIf { it.isNotEmpty() } }
-            .mapNotNull { line -> line.split(":", limit = 2).takeIf { it.size == 2 } }
-            .associate { (name, value) -> name.trim().lowercase() to value.trim() }
-        val (method, target) = requestLine.split(" ").let { it.getOrNull(0) to it.getOrNull(1).orEmpty() }
-        val path = target.substringBefore('?')
+        val request = Http.read(client, MAX_BODY_BYTES) ?: return
+        val method = request.method
+        val path = request.path
 
-        fun form(): Map<String, List<String>>? {
-            val length = headers["content-length"]?.toIntOrNull() ?: 0
-            if (length !in 0..MAX_BODY_BYTES) return null
-            return parseForm(String(readBytes(input, length), Charsets.UTF_8))
-        }
+        fun form(): Map<String, List<String>>? = request.body?.let { parseForm(String(it, Charsets.UTF_8)) }
 
         when {
             // Already connected: straight to the photos and weather choices
@@ -88,6 +76,10 @@ class SetupServer(private val prefs: Prefs, private val onChanged: () -> Unit) {
                 val key = form["key"]?.firstOrNull().orEmpty().trim()
                 if (!host.startsWith("http://") && !host.startsWith("https://")) {
                     return respond(client, 200, connectPage(host, "L'adresse doit commencer par https:// ou http://"))
+                }
+                // The API key goes with every request: in clear, only towards the local network
+                if (host.startsWith("http://") && !Http.isLocal(host)) {
+                    return respond(client, 200, connectPage(host, "Hors du réseau local, l'adresse doit commencer par https:// : en http://, la clé d'API circulerait en clair sur Internet."))
                 }
                 val albums = try {
                     ImmichClient(host, key).albums()
@@ -181,42 +173,7 @@ class SetupServer(private val prefs: Prefs, private val onChanged: () -> Unit) {
         </style></head><body>$body</body></html>
     """.trimIndent()
 
-    private fun respond(client: Socket, status: Int, body: String) {
-        val bytes = body.toByteArray(Charsets.UTF_8)
-        val head = "HTTP/1.1 $status ${STATUS_TEXT[status] ?: "OK"}\r\n" +
-            "Content-Type: text/html; charset=utf-8\r\n" +
-            "Content-Length: ${bytes.size}\r\n" +
-            "Cache-Control: no-store\r\n" +
-            "Referrer-Policy: no-referrer\r\n" +
-            "Connection: close\r\n\r\n"
-        client.getOutputStream().apply {
-            write(head.toByteArray(Charsets.UTF_8))
-            write(bytes)
-            flush()
-        }
-    }
-
-    private fun readLine(input: InputStream): String? {
-        val buffer = ByteArrayOutputStream()
-        while (true) {
-            val byte = input.read()
-            if (byte == -1) return if (buffer.size() == 0) null else buffer.toString("ISO-8859-1")
-            if (byte == '\n'.code) return buffer.toString("ISO-8859-1").trimEnd('\r')
-            if (buffer.size() >= MAX_LINE_BYTES) return null
-            buffer.write(byte)
-        }
-    }
-
-    private fun readBytes(input: InputStream, length: Int): ByteArray {
-        val bytes = ByteArray(length)
-        var read = 0
-        while (read < length) {
-            val count = input.read(bytes, read, length - read)
-            if (count == -1) break
-            read += count
-        }
-        return bytes.copyOf(read)
-    }
+    private fun respond(client: Socket, status: Int, body: String) = Http.respond(client, status, body)
 
     // Repeated keys (checkboxes) are kept as lists
     private fun parseForm(body: String): Map<String, List<String>> = body.split("&")
@@ -232,15 +189,6 @@ class SetupServer(private val prefs: Prefs, private val onChanged: () -> Unit) {
         // Next to the Immich TV sign-in port (47913)
         const val PORT = 47914
         private const val MAX_BODY_BYTES = 64 * 1024
-        private const val MAX_LINE_BYTES = 8 * 1024
         private const val MAX_ATTEMPTS = 10
-        private val STATUS_TEXT = mapOf(200 to "OK", 404 to "Not Found", 405 to "Method Not Allowed", 413 to "Payload Too Large", 429 to "Too Many Requests")
-
-        // Ethernet or Wi-Fi address the phone can reach on the local network
-        fun localIpv4Address(): String? = NetworkInterface.getNetworkInterfaces()?.toList().orEmpty()
-            .filter { it.isUp && !it.isLoopback && !it.isVirtual }
-            .flatMap { it.inetAddresses.toList() }
-            .firstOrNull { it is Inet4Address && it.isSiteLocalAddress }
-            ?.hostAddress
     }
 }

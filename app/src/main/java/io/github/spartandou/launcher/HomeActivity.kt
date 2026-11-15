@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Color
+import android.net.http.HttpResponseCache
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -22,6 +23,7 @@ import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import java.io.File
 import java.util.concurrent.Executors
 
 class HomeActivity : Activity() {
@@ -30,13 +32,12 @@ class HomeActivity : Activity() {
     private lateinit var status: StatusBar
     private lateinit var news: NewsPanel
     private lateinit var newsBox: View
-    private lateinit var weather: Weather
+    private lateinit var weather: WeatherLine
     private lateinit var rowsBox: LinearLayout
     private lateinit var dock: LinearLayout
     private lateinit var topScrim: View
     private lateinit var bottomScrim: View
     private lateinit var clockBox: LinearLayout
-    private lateinit var weatherView: TextView
     private lateinit var infoBox: LinearLayout
     private lateinit var statusBox: View
     private lateinit var allApps: View
@@ -44,6 +45,11 @@ class HomeActivity : Activity() {
 
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
+    // Downloads never hold up what is read from the device (the apps, their pictures): a server
+    // that does not answer would otherwise freeze the tiles for the length of its timeouts
+    private val network = Executors.newFixedThreadPool(2)
+    // Pictures being downloaded, so that rebuilding the rows does not ask for them again
+    private val loadingPrograms = HashSet<Long>()
     // The background of a focused "continue watching" entry, never queued behind tile pictures
     private val mediaWorker = Executors.newSingleThreadExecutor()
     private var apps: List<App> = emptyList()
@@ -51,7 +57,6 @@ class HomeActivity : Activity() {
     private var gridDirty = true
     private var uiHidden = false
     private var layoutKey = ""
-    private var weatherLoading = false
 
     // Pictures of the home row tiles, per row size; the "all apps" ones are never kept
     private val rowImages = HashMap<String, TileImage>()
@@ -62,7 +67,7 @@ class HomeActivity : Activity() {
     private val tick = object : Runnable {
         override fun run() {
             if (prefs.showStatus) status.refresh()
-            if (prefs.showWeather) updateWeather()
+            weather.update()
             main.postDelayed(this, TICK_MS)
         }
     }
@@ -86,13 +91,21 @@ class HomeActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_home)
         prefs = Prefs(this)
-        weather = Weather(this)
+        weather = WeatherLine(findViewById(R.id.weather), prefs, network)
+        // Posters and stills come back from disk instead of the network (the "new" panel shows
+        // the same few in turn all day long)
+        if (HttpResponseCache.getInstalled() == null) {
+            try {
+                HttpResponseCache.install(File(cacheDir, "http"), HTTP_CACHE_BYTES)
+            } catch (e: Exception) {
+                Log.w(TAG, "No HTTP cache", e)
+            }
+        }
         rowsBox = findViewById(R.id.rows)
         dock = findViewById(R.id.dock)
         topScrim = findViewById(R.id.top_scrim)
         bottomScrim = findViewById(R.id.bottom_scrim)
         clockBox = findViewById(R.id.clock_box)
-        weatherView = findViewById(R.id.weather)
         infoBox = findViewById(R.id.info_box)
         statusBox = findViewById(R.id.status_box)
         allApps = findViewById(R.id.all_apps)
@@ -309,38 +322,11 @@ class HomeActivity : Activity() {
             bottomMargin = if (top) Tiles.dp(this@HomeActivity, 24) else 0
         }
         statusBox.visibility = if (prefs.showStatus) View.VISIBLE else View.GONE
-        if (!prefs.showWeather) weatherView.visibility = View.GONE
+        weather.update()
         if (prefs.accent != Prefs.ACCENT_AUTO) Accent.set(prefs.accentColor, animate = false)
         topScrim.alpha = 1f
         bottomScrim.alpha = 1f
         findViewById<View>(android.R.id.content).requestLayout()
-    }
-
-    private fun updateWeather() {
-        showWeatherLine()
-        val city = prefs.weatherCity
-        if (weatherLoading || !weather.stale(city)) return
-        weatherLoading = true
-        worker.execute {
-            val ok = try { weather.refresh(city); true } catch (e: Exception) { Log.w(TAG, "Weather not loaded", e); false }
-            main.post {
-                weatherLoading = false
-                if (ok && prefs.showWeather) showWeatherLine()
-            }
-        }
-    }
-
-    private var weatherIcon = 0
-
-    private fun showWeatherLine() {
-        val line = weather.line() ?: return
-        weatherView.text = line.text
-        if (line.icon != weatherIcon) {
-            weatherIcon = line.icon
-            val size = Tiles.dp(this, 18)
-            weatherView.setCompoundDrawablesRelative(getDrawable(line.icon)?.apply { setBounds(0, 0, size, size) }, null, null, null)
-        }
-        weatherView.visibility = View.VISIBLE
     }
 
     private fun scheduleHide() {
@@ -355,6 +341,8 @@ class HomeActivity : Activity() {
         dock.animate().alpha(alpha).setDuration(duration).start()
         newsBox.animate().alpha(alpha).setDuration(duration).start()
         dockScrim.animate().alpha(alpha).setDuration(duration).start()
+        // Nothing to turn while nobody sees it
+        if (hidden) news.stop() else news.start()
         if (!hidden) scheduleHide()
     }
 
@@ -478,29 +466,33 @@ class HomeActivity : Activity() {
         }
         tile.tag = program.id
         tile.setOnClickListener { openProgram(program) }
-        fun show(picture: android.graphics.drawable.Drawable?) {
-            Tiles.fill(this, tile, program.title, picture, if (picture == null) getDrawable(R.drawable.ic_play) else null)
-            program.progress?.let { p ->
-                // Thin progress bar along the bottom edge
-                tile.addView(View(this).apply { setBackgroundColor(Accent.color) },
-                    FrameLayout.LayoutParams((width * p).toInt().coerceAtLeast(1), Tiles.dp(this, 4), Gravity.BOTTOM))
-            }
-        }
         val cached = programImages[program.id]
-        if (cached != null) show(cached) else {
-            show(null)
-            program.image?.let { uri ->
-                worker.execute {
+        if (cached != null) fillProgram(tile, program, width, cached) else {
+            fillProgram(tile, program, width, null)
+            program.image?.takeIf { loadingPrograms.add(program.id) }?.let { uri ->
+                network.execute {
                     val bitmap = try { WatchNext.bytes(this, uri)?.let { WatchNext.decode(it, width) } } catch (e: Exception) { null }
                     main.post {
+                        loadingPrograms.remove(program.id)
                         val picture = bitmap?.let { centreCrop(it, width, Tiles.height(width)) }
                         if (picture != null) programImages[program.id] = picture
-                        if (tile.isAttachedToWindow) show(picture)
+                        // The rows may have been rebuilt meanwhile: the tile now on screen gets it
+                        val shown = if (tile.isAttachedToWindow) tile else rowsBox.findViewWithTag<FrameLayout>(program.id)
+                        if (shown != null) fillProgram(shown, program, width, picture)
                     }
                 }
             }
         }
         return tile
+    }
+
+    private fun fillProgram(tile: FrameLayout, program: Program, width: Int, picture: android.graphics.drawable.Drawable?) {
+        Tiles.fill(this, tile, program.title, picture, if (picture == null) getDrawable(R.drawable.ic_play) else null)
+        program.progress?.let { p ->
+            // Thin progress bar along the bottom edge
+            tile.addView(View(this).apply { setBackgroundColor(Accent.color) },
+                FrameLayout.LayoutParams((width * p).toInt().coerceAtLeast(1), Tiles.dp(this, 4), Gravity.BOTTOM))
+        }
     }
 
     /** Opens a "continue watching" or "new" entry where its app said. */
@@ -976,6 +968,7 @@ class HomeActivity : Activity() {
         private const val TAG = "Home"
         private const val HIDE_DELAY_MS = 30_000L
         private const val TICK_MS = 5_000L
+        private const val HTTP_CACHE_BYTES = 16L * 1024 * 1024
         private const val ALL_APPS = "all_apps"
         private const val SETTINGS = "settings"
         private const val NO_FOCUS = ""

@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.SharedPreferences
 import org.json.JSONArray
 import org.json.JSONObject
+import java.security.MessageDigest
+import java.security.SecureRandom
+import java.util.UUID
 
 class Prefs(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("launcher", Context.MODE_PRIVATE)
@@ -15,8 +18,29 @@ class Prefs(context: Context) {
 
     /** Immich API key, read-only permissions (asset.read, asset.view, album.read, memory.read). */
     var apiKey: String
-        get() = prefs.getString("api_key", "")!!
-        set(value) = prefs.edit().putString("api_key", value.trim()).apply()
+        get() {
+            val encrypted = prefs.getString("api_key_enc", null)
+            if (encrypted == null) {
+                // Stored in clear by earlier versions: encrypted on first read
+                val plain = prefs.getString("api_key", "")!!
+                if (plain.isNotEmpty()) apiKey = plain
+                return plain
+            }
+            decrypted?.takeIf { it.first == encrypted }?.let { return it.second }
+            val plain = Secret.decrypt(encrypted).orEmpty()
+            decrypted = encrypted to plain
+            return plain
+        }
+        set(value) {
+            val plain = value.trim()
+            val encrypted = if (plain.isEmpty()) null else Secret.encrypt(plain)
+            decrypted = encrypted?.let { it to plain }
+            // Without a working keystore the key stays in clear, as before, rather than being lost
+            prefs.edit()
+                .putString("api_key_enc", encrypted)
+                .putString("api_key", if (encrypted == null) plain else null)
+                .apply()
+        }
 
     var albumIds: Set<String>
         get() = prefs.getStringSet("album_ids", emptySet())!!
@@ -26,6 +50,22 @@ class Prefs(context: Context) {
     var memories: Boolean
         get() = prefs.getBoolean("memories", true)
         set(value) = prefs.edit().putBoolean("memories", value).apply()
+
+    /** Only today's memories, when there are some; wins over [memories]. */
+    var memoriesOnly: Boolean
+        get() = prefs.getBoolean("memories_only", false)
+        set(value) = prefs.edit().putBoolean("memories_only", value).apply()
+
+    /** Key Home Assistant sends to drive the photo frame, made on first use. Short: it is typed by hand. */
+    val frameKey: String
+        get() = prefs.getString("frame_key", null) ?: SecureRandom().let { random ->
+            String(CharArray(KEY_LENGTH) { KEY_ALPHABET[random.nextInt(KEY_ALPHABET.length)] })
+        }.also { prefs.edit().putString("frame_key", it).apply() }
+
+    /** Tells this device from another one in Home Assistant, whatever its address becomes. */
+    val deviceId: String
+        get() = prefs.getString("device_id", null)
+            ?: UUID.randomUUID().toString().also { prefs.edit().putString("device_id", it).apply() }
 
     var intervalSeconds: Int
         get() = prefs.getInt("interval", 30)
@@ -51,8 +91,13 @@ class Prefs(context: Context) {
     var appRows: List<AppRow>?
         get() {
             val json = prefs.getString("app_rows", null) ?: return legacyRows()
-            val array = JSONArray(json)
-            return (0 until array.length()).map { AppRow.fromJson(array.getJSONObject(it)) }
+            return try {
+                val array = JSONArray(json)
+                (0 until array.length()).map { AppRow.fromJson(array.getJSONObject(it)) }
+            } catch (e: Exception) {
+                // Damaged: as on a first start, rather than a home screen that never opens
+                null
+            }
         }
         set(value) = prefs.edit().putString("app_rows", value?.let { rows -> JSONArray().apply { rows.forEach { put(it.toJson()) } }.toString() }).apply()
 
@@ -143,16 +188,27 @@ class Prefs(context: Context) {
 
     /** Changes whenever the photo source changes, so the home screen reloads the photo list. */
     val sourceKey: String
-        get() = "$serverUrl|$apiKey|${albumIds.sorted().joinToString(",")}|$memories"
+        get() = sha256("$serverUrl|$apiKey|${albumIds.sorted().joinToString(",")}|$memories|$memoriesOnly")
 
     /** Changes whenever the layout changes, so the home screen rebuilds it. */
     val layoutKey: String
         get() = "$dockOnTop|$visibleRows|${prefs.getString("app_rows", "")}|$pinnedOnTop|$clockPosition|$clockSize|$accent|$showNews|" +
             "$showWeather|$showStatus|$carousel"
 
+    // A digest: this key is written next to the photo list, the API key must not be
+    private fun sha256(text: String) = MessageDigest.getInstance("SHA-256").digest(text.toByteArray())
+        .joinToString("") { "%02x".format(it) }
+
     companion object {
+        // The decrypted API key with what it was read from: the keystore is not asked at every photo
+        @Volatile
+        private var decrypted: Pair<String, String>? = null
+
         val INTERVALS = intArrayOf(10, 15, 30, 60, 120, 300)
         const val MAX_VISIBLE_ROWS = 3
+        // No 0/O, 1/I/L: read on a screen, typed on another
+        private const val KEY_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+        private const val KEY_LENGTH = 8
         // Right after the fixed colours in the list of choices
         const val ACCENT_AUTO = 6
 
