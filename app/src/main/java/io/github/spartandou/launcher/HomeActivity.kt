@@ -16,6 +16,7 @@ import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.GridLayout
@@ -56,6 +57,8 @@ class HomeActivity : Activity() {
     private var appsDirty = true
     private var gridDirty = true
     private var uiHidden = false
+    // The rest of the touch that woke the apps up, so it never taps one
+    private var swallowTouch = false
     private var layoutKey = ""
 
     // Pictures of the home row tiles, per row size; the "all apps" ones are never kept
@@ -218,6 +221,21 @@ class HomeActivity : Activity() {
             if (allApps.visibility != View.VISIBLE && shiftRows(event.keyCode)) return true
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    // On a tablet: the first touch only brings the apps back, the next ones keep them shown
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            if (uiHidden) {
+                setUiHidden(false)
+                swallowTouch = true
+                return true
+            }
+            swallowTouch = false
+            scheduleHide()
+        }
+        if (swallowTouch) return true
+        return super.dispatchTouchEvent(event)
     }
 
     /**
@@ -625,6 +643,8 @@ class HomeActivity : Activity() {
         val showNews = prefs.showNews
         if (!showNews) news.hide()
         if (!continueRow && !showNews) return
+        // Only Android TV has the programs apps publish (and the permission to read them)
+        if (!isTv()) { news.hide(); return }
         if (checkSelfPermission(READ_TV_LISTINGS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(READ_TV_LISTINGS), 1)
             return

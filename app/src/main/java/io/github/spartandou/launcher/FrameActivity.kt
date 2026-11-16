@@ -28,15 +28,16 @@ class FrameActivity : Activity() {
     }
 
     /**
-     * Away from a TV, the app is only a photo frame: its home screen is no longer offered as the
-     * device's launcher, nor its remote buttons service in the accessibility settings.
+     * Away from a TV, the remote buttons service is useless: it leaves the accessibility settings.
+     * The home screen stays offered as the launcher (an earlier version disabled it: turned back on).
      */
     private fun hideTvParts() {
-        if (packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)) return
-        listOf(HomeActivity::class.java, KeyService::class.java).forEach { part ->
-            packageManager.setComponentEnabledSetting(
-                ComponentName(this, part), PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP)
-        }
+        if (isTv()) return
+        val pm = packageManager
+        pm.setComponentEnabledSetting(ComponentName(this, KeyService::class.java),
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP)
+        pm.setComponentEnabledSetting(ComponentName(this, HomeActivity::class.java),
+            PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, PackageManager.DONT_KILL_APP)
     }
 
     override fun onStart() {

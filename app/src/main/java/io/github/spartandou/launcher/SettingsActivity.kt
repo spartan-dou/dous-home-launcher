@@ -53,15 +53,15 @@ class SettingsActivity : Activity() {
     private var apps: List<App>? = null
     private var rendering = false
 
-    // Away from a TV (a tablet used as a photo frame), what belongs to the home screen is left out
+    // Away from a TV (a tablet), what needs Android TV is left out: the apps' programs and the remote
     private val sections by lazy {
-        val tv = packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+        val tv = isTv()
         listOfNotNull(
             R.string.section_photos to ::photos,
             R.string.section_albums to ::albums,
             R.string.section_weather to ::weatherSection,
             R.string.section_display to ::display,
-            (R.string.section_rows to ::rows).takeIf { tv },
+            R.string.section_rows to ::rows,
             (R.string.section_news to ::newsSection).takeIf { tv },
             (R.string.section_remote to ::remote).takeIf { tv },
             R.string.section_frame to ::frameSection,

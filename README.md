@@ -64,7 +64,7 @@ Navigation : haut depuis la première rangée atteint « Toutes les applis » et
 Les mêmes photos en plein écran, avec l'heure, la météo, le lieu et la date : de quoi remplacer ImmichFrame, sans serveur ni navigateur.
 
 - **Sur la TV** : c'est un économiseur d'écran (« Cadre photo », à choisir dans *Paramètres → Préférences relatives à l'appareil → Économiseur d'écran*). Android le lance et l'arrête ; la première touche revient à ce qui était affiché.
-- **Sur une tablette** : c'est l'appli « Cadre photo », la seule partie visible (l'accueil TV et le service de la télécommande se désactivent d'eux-mêmes hors d'une Android TV, et les réglages n'affichent que ce qui concerne le cadre). Elle garde l'écran allumé tant qu'elle est affichée. Un toucher fait apparaître les boutons (précédente, pause, suivante, réglages, fermer), un glissement change de photo.
+- **Sur une tablette** : c'est l'appli « Cadre photo ». Elle garde l'écran allumé tant qu'elle est affichée. Un toucher fait apparaître les boutons (précédente, pause, suivante, réglages, fermer), un glissement change de photo. L'accueil reste aussi proposé comme launcher (touche Accueil, ou *Paramètres → Applis par défaut → Appli d'écran d'accueil*) : il liste alors les applis classiques (icône quand elles n'ont pas de bannière TV), et un toucher fait revenir les applis masquées. Seuls le service de la télécommande, « Reprendre la lecture » et les Nouveautés, propres à Android TV, sont absents.
 
 Dans les deux cas, rien ne tourne quand le cadre n'est pas à l'écran.
 

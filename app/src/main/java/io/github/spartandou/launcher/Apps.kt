@@ -4,14 +4,19 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 
-class App(val packageName: String, val label: String, val info: ActivityInfo) {
+/** An Android TV, as opposed to a tablet or a phone. */
+fun Context.isTv(): Boolean = packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+
+/** [category]: the launcher entry it was found by, the TV one or the tablet/phone one. */
+class App(val packageName: String, val label: String, val info: ActivityInfo, val category: String) {
     fun intent(): Intent = Intent(Intent.ACTION_MAIN)
-        .addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
+        .addCategory(category)
         .setComponent(ComponentName(packageName, info.name))
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
 }
@@ -20,14 +25,21 @@ class App(val packageName: String, val label: String, val info: ActivityInfo) {
 class TileImage(val banner: Drawable?, val icon: Drawable?)
 
 object Apps {
-    /** TV apps (the ones with a leanback entry), sorted by name. Labels only: pictures are loaded per tile. */
+    /**
+     * Launchable apps, sorted by name. Labels only: pictures are loaded per tile. On a TV, the ones
+     * with a leanback entry; elsewhere (tablet) the usual launcher entries too, the TV one first
+     * when an app has both, for its banner.
+     */
     fun load(context: Context): List<App> {
         val pm = context.packageManager
-        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
-        return pm.queryIntentActivities(intent, 0)
-            .map { it.activityInfo }
-            .distinctBy { it.packageName }
-            .map { App(it.packageName, it.loadLabel(pm).toString(), it) }
+        val categories = if (context.isTv()) listOf(Intent.CATEGORY_LEANBACK_LAUNCHER)
+            else listOf(Intent.CATEGORY_LEANBACK_LAUNCHER, Intent.CATEGORY_LAUNCHER)
+        return categories
+            .flatMap { category ->
+                pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(category), 0).map { it.activityInfo to category }
+            }
+            .distinctBy { it.first.packageName }
+            .map { (info, category) -> App(info.packageName, info.loadLabel(pm).toString(), info, category) }
             .sortedWith(compareBy(frenchOrder) { it.label })
     }
 
