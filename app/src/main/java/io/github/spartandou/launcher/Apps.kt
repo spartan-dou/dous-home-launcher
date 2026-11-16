@@ -13,6 +13,17 @@ import android.graphics.drawable.Drawable
 /** An Android TV, as opposed to a tablet or a phone. */
 fun Context.isTv(): Boolean = packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
 
+/**
+ * Turns the home screen back on: versions up to v1.21 disabled it away from a TV, and that setting
+ * outlives updates. Away from a TV, the remote buttons service stays off (useless there).
+ */
+fun Context.restoreHomeScreen() {
+    packageManager.setComponentEnabledSetting(ComponentName(this, HomeActivity::class.java),
+        PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, PackageManager.DONT_KILL_APP)
+    if (!isTv()) packageManager.setComponentEnabledSetting(ComponentName(this, KeyService::class.java),
+        PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP)
+}
+
 /** [category]: the launcher entry it was found by, the TV one or the tablet/phone one. */
 class App(val packageName: String, val label: String, val info: ActivityInfo, val category: String) {
     fun intent(): Intent = Intent(Intent.ACTION_MAIN)

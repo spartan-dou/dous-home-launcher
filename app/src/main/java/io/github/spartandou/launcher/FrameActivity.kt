@@ -2,9 +2,7 @@ package io.github.spartandou.launcher
 
 import android.app.Activity
 import android.content.ComponentCallbacks2
-import android.content.ComponentName
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.WindowInsets
 import android.view.WindowInsetsController
@@ -20,24 +18,14 @@ class FrameActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        hideTvParts()
+        restoreHomeScreen()
+        // The home screen is not always used on a tablet: the frame looks for updates too
+        val prefs = Prefs(this)
+        if (prefs.autoUpdate && Updater.canInstall(this)) Updater.check(this, force = false) {}
         setContentView(R.layout.frame)
         frame = Frame(this, findViewById(R.id.frame_root), touch = true, onClose = ::finish) {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
-    }
-
-    /**
-     * Away from a TV, the remote buttons service is useless: it leaves the accessibility settings.
-     * The home screen stays offered as the launcher (an earlier version disabled it: turned back on).
-     */
-    private fun hideTvParts() {
-        if (isTv()) return
-        val pm = packageManager
-        pm.setComponentEnabledSetting(ComponentName(this, KeyService::class.java),
-            PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP)
-        pm.setComponentEnabledSetting(ComponentName(this, HomeActivity::class.java),
-            PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, PackageManager.DONT_KILL_APP)
     }
 
     override fun onStart() {

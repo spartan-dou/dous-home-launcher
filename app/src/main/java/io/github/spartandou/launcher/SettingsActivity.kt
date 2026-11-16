@@ -500,6 +500,22 @@ class SettingsActivity : Activity() {
 
     private fun frameSection() {
         add(action(getString(R.string.frame_open)) { startActivity(Intent(this, FrameActivity::class.java)) })
+        if (!isTv()) {
+            // A tablet has no remote Home button leading to it: open it, or make it the device's home screen
+            add(action(getString(R.string.home_open)) {
+                restoreHomeScreen()
+                startActivity(Intent(this, HomeActivity::class.java))
+            })
+            add(action(getString(R.string.home_default)) {
+                restoreHomeScreen()
+                try {
+                    startActivity(Intent(android.provider.Settings.ACTION_HOME_SETTINGS))
+                } catch (e: Exception) {
+                    startActivity(Intent(android.provider.Settings.ACTION_SETTINGS))
+                }
+            })
+            add(hint(getString(R.string.home_hint)))
+        }
         add(hint(getString(R.string.frame_how)))
         add(subheader(getString(R.string.frame_ha)))
         val address = Http.localIpv4Address()?.let { "http://$it:${FrameServer.PORT}" } ?: getString(R.string.frame_no_network)
