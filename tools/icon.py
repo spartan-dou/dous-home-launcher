@@ -14,7 +14,7 @@ R = 0.095
 BORDER = 0.034
 SHADOW_DY = 0.03
 SHADOW_SOFT = 0.07
-FG_SCALE = 0.78
+FG_SCALE = 72 / 108
 
 HORIZON = 0.665
 SUN_C, SUN_R = (0.575, 0.605), 0.06
@@ -93,9 +93,10 @@ def photo(x, y):
 
 
 def sample(x, y, mode):
-    if mode == "fg":
-        # Adaptive icon foreground: the house shrunk into the 66 % safe zone, on nothing
-        x, y = 0.5 + (x - 0.5) / FG_SCALE, 0.52 + (y - 0.52) / FG_SCALE
+    if mode in ("fg", "bg"):
+        # Adaptive icon layers: the launcher shows their middle two thirds through its mask, so the
+        # whole icon is drawn there, exactly as the full one (Home Assistant's) looks
+        x, y = 0.5 + (x - 0.5) / FG_SCALE, 0.5 + (y - 0.5) / FG_SCALE
     if mode != "bg":
         d = sd_polygon(CORE, x, y) - R
     else:

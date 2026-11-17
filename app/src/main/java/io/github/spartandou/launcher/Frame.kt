@@ -307,7 +307,8 @@ class Frame(
             window.attributes = window.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
             return
         }
-        val target = MIN_BRIGHTNESS + (1f - MIN_BRIGHTNESS) * level / 100f
+        // Squared: the low end of the slider gets the fine steps the eye notices there
+        val target = MIN_BRIGHTNESS + (1f - MIN_BRIGHTNESS) * (level / 100f) * (level / 100f)
         if (!fade) {
             window.attributes = window.attributes.apply { screenBrightness = target }
             return
@@ -419,8 +420,8 @@ class Frame(
         private const val PAUSE_MARK_MS = 900L
         private const val BUSY_MS = 2_000L
         private const val BRIGHTNESS_FADE_MS = 1_000L
-        // 0 % from Home Assistant: dim, but the photo still there
-        private const val MIN_BRIGHTNESS = 0.06f
+        // 0 % from Home Assistant: very dim, but the photo still there (0 can be the backlight off)
+        private const val MIN_BRIGHTNESS = 0.01f
         private const val HOME_ASSISTANT = "io.homeassistant.companion.android"
         // ImmichFrame's cards: 18 % of a dark tint over the blurred photo
         private const val GLASS_TINT = 0x2E000000
