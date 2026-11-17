@@ -6,6 +6,7 @@ import android.graphics.drawable.Drawable
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
@@ -19,6 +20,7 @@ import android.widget.TextView
  */
 object Tiles {
     const val MARGIN_DP = 10
+    private const val PRESSED_SCALE = 0.94f
     const val FRAME_DP = 2
     const val ELEVATION_DP = 4
     private const val DIMMED = 0.75f
@@ -41,6 +43,16 @@ object Tiles {
         }
         tile.clipToOutline = true
         tile.elevation = dp(context, ELEVATION_DP).toFloat()
+
+        // On a tablet a tap has no focus to show: the tile gives a little under the finger. The TV
+        // keeps its focus frame only, as before
+        if (!context.isTv()) tile.setOnTouchListener { view, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> view.animate().scaleX(PRESSED_SCALE).scaleY(PRESSED_SCALE).alpha(0.8f).setDuration(70).start()
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> view.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(180).start()
+            }
+            false
+        }
 
         tile.setOnFocusChangeListener { view, focused ->
             if (zoom) {

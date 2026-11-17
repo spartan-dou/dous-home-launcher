@@ -410,14 +410,25 @@ class PhotoWall(
         if (!prefs.drift && !frame) return
         slide.pivotX = slide.width * Random.nextFloat()
         slide.pivotY = slide.height * Random.nextFloat()
-        drifts[slide] = ObjectAnimator.ofPropertyValuesHolder(slide,
-            PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, if (frame) FRAME_ZOOM else DRIFT_SCALE),
-            PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, if (frame) FRAME_ZOOM else DRIFT_SCALE)).apply {
-            duration = DRIFT_MS
-            repeatCount = ValueAnimator.INFINITE
-            repeatMode = ValueAnimator.REVERSE
-            interpolator = AccelerateDecelerateInterpolator()
-            start()
+        drifts[slide] = if (frame) {
+            // The frame zooms in steadily for as long as the photo is shown, as ImmichFrame does
+            ObjectAnimator.ofPropertyValuesHolder(slide,
+                PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, FRAME_ZOOM),
+                PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, FRAME_ZOOM)).apply {
+                duration = prefs.intervalSeconds * 1000L + FADE_MS
+                interpolator = android.view.animation.LinearInterpolator()
+                start()
+            }
+        } else {
+            ObjectAnimator.ofPropertyValuesHolder(slide,
+                PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, DRIFT_SCALE),
+                PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, DRIFT_SCALE)).apply {
+                duration = DRIFT_MS
+                repeatCount = ValueAnimator.INFINITE
+                repeatMode = ValueAnimator.REVERSE
+                interpolator = AccelerateDecelerateInterpolator()
+                start()
+            }
         }
     }
 
@@ -532,8 +543,8 @@ class PhotoWall(
         private const val MAX_H = 1080
         // 3 % over 30 s, then back: barely noticed, the photo just breathes
         private const val DRIFT_SCALE = 1.03f
-        // The frame's zoom, a little more marked, as ImmichFrame's
-        private const val FRAME_ZOOM = 1.08f
+        // The frame's zoom over a photo's time on screen, as marked as ImmichFrame's
+        private const val FRAME_ZOOM = 1.12f
         // How far ahead a portrait photo is looked for, to pair with one on screen
         private const val PAIR_LOOKAHEAD = 20
         private const val PAIR_GAP_DIVISOR = 90

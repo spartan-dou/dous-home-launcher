@@ -48,6 +48,9 @@ class Frame(
     private var sourceKey = prefs.sourceKey
     // 1% of the screen's shorter side: the cards are sized on it, as ImmichFrame's overlay (vmin)
     private var vmin = 0f
+    // A tap is not repeated while the app it opened comes up (the fork's "busy")
+    private var clockBusyUntil = 0L
+    private var noteBusyUntil = 0L
 
     // Weather and the age of what Home Assistant sent, checked now and then
     private val tick = object : Runnable {
@@ -241,7 +244,7 @@ class Frame(
     private fun noteCard(note: Overlay.Note): View {
         val card = FrameLayout(context)
         card.addView(GlassView(context).apply { tint = GLASS_TINT; cornerRadius = px(3f).toFloat() }, FrameLayout.LayoutParams(-1, -1))
-        val link = note.link
+        val link = target(note.link)
         card.addView(TextView(context).apply {
             text = if (link != null) "${note.message} ›" else note.message
             setTextAppearance(R.style.GlassText)
@@ -254,27 +257,44 @@ class Frame(
             setPadding(px(2.6f), px(1.2f), px(2.6f), px(1.2f))
         }, FrameLayout.LayoutParams(-1, -1)) // match_parent, as the glass: see frame.xml
         card.layoutParams = LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = px(1.2f) }
+        // Without a link, taps go through to the previous / pause / next zones underneath
         if (touch && link != null) card.setOnClickListener { open(link) }
         return card
     }
 
+    // As the ImmichFrame fork's overlay: an empty invitation, so Home Assistant's app finds no
+    // server, closes that screen and comes back as it was left (not reloaded on its first view)
     private fun openHomeAssistant() {
-        val intent = context.packageManager.getLaunchIntentForPackage(HOME_ASSISTANT) ?: return
-        try {
-            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        } catch (e: Exception) {
-            Log.w(TAG, "Cannot open Home Assistant", e)
-        }
+        if (System.currentTimeMillis() < clockBusyUntil) return
+        clockBusyUntil = System.currentTimeMillis() + BUSY_MS
+        clockBox.alpha = 0.5f
+        main.postDelayed({ clockBox.alpha = 1f }, BUSY_MS)
+        go("homeassistant://invite")
     }
 
-    /** "/path" is a Home Assistant view, opened by its app; other links are opened as they are. */
     private fun open(link: String) {
-        val uri = Uri.parse(if (link.startsWith("/")) "homeassistant://navigate$link" else link)
+        val target = target(link) ?: return
+        if (System.currentTimeMillis() < noteBusyUntil) return
+        noteBusyUntil = System.currentTimeMillis() + BUSY_MS
+        go(target)
+    }
+
+    private fun go(uri: String) {
         try {
-            context.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (e: Exception) {
             Log.w(TAG, "Nothing opens $uri", e)
         }
+    }
+
+    /**
+     * As the fork: "/path" opens that view in Home Assistant's app; any scheme other than the web
+     * or homeassistant:// is dropped (no javascript: or intent: coming from an automation's text).
+     */
+    private fun target(link: String?): String? {
+        val trimmed = link?.trim().orEmpty()
+        if (trimmed.startsWith("/")) return "homeassistant://navigate$trimmed"
+        return trimmed.takeIf { Regex("^(https?|homeassistant)://", RegexOption.IGNORE_CASE).containsMatchIn(it) }
     }
 
     // --- Touch ---
@@ -332,6 +352,7 @@ class Frame(
         private const val TAG = "Frame"
         private const val TICK_MS = 30_000L
         private const val PAUSE_MARK_MS = 900L
+        private const val BUSY_MS = 2_000L
         private const val HOME_ASSISTANT = "io.homeassistant.companion.android"
         // ImmichFrame's cards: 18 % of a dark tint over the blurred photo
         private const val GLASS_TINT = 0x2E000000
