@@ -52,6 +52,8 @@ class PhotoWall(
     private val worker = Executors.newSingleThreadExecutor()
     private val listFile = File(context.filesDir, "photos.json")
     private val lastPhotoFile = File(context.cacheDir, "last.jpg")
+    // Its place and date, so the photo shown again at once keeps its caption
+    private val lastInfoFile = File(context.cacheDir, "last.json")
 
     // Only touched on the worker thread
     private var photos: List<Photo> = emptyList()
@@ -180,7 +182,8 @@ class PhotoWall(
             val bytes = lastPhotoFile.readBytes()
             val bitmap = decode(bytes) ?: return@execute
             val blur = Blur.fromJpeg(bytes)
-            main.post { if (started && !media) display(bitmap, blur, bitmap.height > bitmap.width, null) else drop(bitmap, blur) }
+            val photo = lastPhoto()
+            main.post { if (started && !media) display(bitmap, blur, bitmap.height > bitmap.width, photo) else drop(bitmap, blur) }
         }
         if (started) schedule(prefs.intervalSeconds * 1000L)
     }
@@ -196,6 +199,13 @@ class PhotoWall(
     private fun clear(slide: FrameLayout) =
         (0 until slide.childCount).forEach { (slide.getChildAt(it) as ImageView).setImageDrawable(null) }
 
+    // Worker thread. The photo of last.jpg, null when unknown (older cache)
+    private fun lastPhoto(): Photo? = try {
+        if (lastInfoFile.exists()) Photo.fromJson(JSONObject(lastInfoFile.readText())) else null
+    } catch (e: Exception) {
+        null
+    }
+
     // Instant picture on boot or after a release, before anything is downloaded
     private fun showLastPhoto() {
         if (!lastPhotoFile.exists()) return
@@ -203,8 +213,9 @@ class PhotoWall(
             val bytes = lastPhotoFile.readBytes()
             val bitmap = decode(bytes) ?: return@execute
             val blur = Blur.fromJpeg(bytes)
+            val photo = lastPhoto()
             main.post {
-                if (started && !media && photoView(front).drawable == null) display(bitmap, blur, bitmap.height > bitmap.width, null)
+                if (started && !media && photoView(front).drawable == null) display(bitmap, blur, bitmap.height > bitmap.width, photo)
                 else drop(bitmap, blur)
             }
         }
@@ -253,6 +264,7 @@ class PhotoWall(
                         }
                         val blur = Blur.fromJpeg(bytes)
                         lastPhotoFile.writeBytes(bytes)
+                        try { lastInfoFile.writeText(photo.toJson().toString()) } catch (e: Exception) { }
                         shown = true
                         val shownBitmap = bitmap
                         val shownPortrait = portrait

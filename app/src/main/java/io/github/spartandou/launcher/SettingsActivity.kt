@@ -83,7 +83,11 @@ class SettingsActivity : Activity() {
             setPadding(dp(40), dp(40), dp(16), dp(40))
             setBackgroundColor(0xFF15181E.toInt())
         }
-        menu.addView(text(getString(R.string.settings_name), 26f).apply {
+        // One line: "Réglages de l'accueil" no longer breaks in two over the menu
+        menu.addView(text(getString(R.string.settings_name), 22f).apply {
+            maxLines = 1
+            // Shrinks rather than cuts where the menu is narrower
+            setAutoSizeTextTypeUniformWithConfiguration(14, 22, 1, TypedValue.COMPLEX_UNIT_SP)
             typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
             setPadding(dp(12), 0, 0, dp(24))
         })
