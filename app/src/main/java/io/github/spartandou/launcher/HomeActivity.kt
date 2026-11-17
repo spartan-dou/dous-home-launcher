@@ -22,6 +22,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.widget.FrameLayout
 import android.widget.GridLayout
 import android.widget.HorizontalScrollView
@@ -101,6 +102,10 @@ class HomeActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_home)
         prefs = Prefs(this)
+        // A tablet's navigation bar stays see-through over the photo: no light veil (Android 15+ adds
+        // one to the 3-button bar), and light buttons
+        window.isNavigationBarContrastEnforced = false
+        window.insetsController?.setSystemBarsAppearance(0, WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
         // The TV is always landscape; a tablet turns freely
         if (isTv()) requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         screenOrientation = resources.configuration.orientation
