@@ -422,8 +422,10 @@ class PhotoWall(
         slide.scaleX = 1f
         slide.scaleY = 1f
         if (!prefs.drift && !frame) return
-        // The frame zooms around a point near the middle (a corner could push the subject out)
-        val spread = if (frame) 0.4f else 1f
+        // The frame zooms around a point near the middle (a corner could push the subject out);
+        // a photo shown whole on its blur, around its very centre, so it stays centred
+        val whole = (slide.getChildAt(1) as ImageView).scaleType == ImageView.ScaleType.FIT_CENTER
+        val spread = if (frame) (if (whole) 0f else 0.4f) else 1f
         slide.pivotX = slide.width * (0.5f + (Random.nextFloat() - 0.5f) * spread)
         slide.pivotY = slide.height * (0.5f + (Random.nextFloat() - 0.5f) * spread)
         drifts[slide] = if (frame) {

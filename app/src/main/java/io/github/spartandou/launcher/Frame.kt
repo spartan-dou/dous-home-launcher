@@ -445,6 +445,14 @@ class Frame(
         }
     }
 
+    /** The remote on the TV's screensaver, as on ImmichFrame: OK (or play/pause) pauses or plays. */
+    fun togglePause() {
+        setPaused(!wall.paused)
+        showPauseMark()
+    }
+
+    fun skip(step: Int) = wall.skip(step)
+
     private fun showPauseMark() {
         pauseMark.setImageResource(if (wall.paused) R.drawable.ic_pause else R.drawable.ic_play)
         pauseMark.animate().cancel()
