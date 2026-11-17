@@ -20,7 +20,7 @@ import android.widget.TextView
  */
 object Tiles {
     const val MARGIN_DP = 10
-    private const val PRESSED_SCALE = 0.94f
+    private const val PRESSED_ALPHA = 0.5f
     const val FRAME_DP = 2
     const val ELEVATION_DP = 4
     private const val DIMMED = 0.75f
@@ -51,12 +51,12 @@ object Tiles {
         tile.clipToOutline = true
         tile.elevation = dp(context, ELEVATION_DP).toFloat()
 
-        // On a tablet a tap has no focus to show: the tile gives a little under the finger. The TV
+        // On a tablet a tap has no focus to show: the tile fades under the finger and back. The TV
         // keeps its focus frame only, as before
         if (!context.isTv()) tile.setOnTouchListener { view, event ->
             when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> view.animate().scaleX(PRESSED_SCALE).scaleY(PRESSED_SCALE).alpha(0.8f).setDuration(70).start()
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> view.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(180).start()
+                MotionEvent.ACTION_DOWN -> view.animate().alpha(PRESSED_ALPHA).setDuration(90).start()
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> view.animate().alpha(1f).setDuration(260).start()
             }
             false
         }
