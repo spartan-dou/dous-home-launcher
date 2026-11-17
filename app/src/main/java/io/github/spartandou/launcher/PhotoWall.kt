@@ -525,9 +525,21 @@ class PhotoWall(
      */
     private fun fit(i: Int, portrait: Boolean, blur: Bitmap?) {
         val screenPortrait = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
-        val whole = frame || portrait != screenPortrait
+        // The frame shows a photo whole on its blurred copy, unless it is near the screen's shape:
+        // then it fills the screen, a few percent cropped, rather than leave thin dark bands
+        val whole = if (frame) !nearScreenShape(i) else portrait != screenPortrait
         photoView(i).scaleType = if (whole) ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_CROP
         (slides[i].getChildAt(0) as ImageView).setImageBitmap(if (whole) blur else null)
+    }
+
+    private fun nearScreenShape(i: Int): Boolean {
+        val photo = photoView(i).drawable ?: return false
+        val metrics = context.resources.displayMetrics
+        val width = slides[i].width.takeIf { it > 0 } ?: metrics.widthPixels
+        val height = slides[i].height.takeIf { it > 0 } ?: metrics.heightPixels
+        if (photo.intrinsicHeight <= 0 || height <= 0) return false
+        val ratio = photo.intrinsicWidth.toFloat() / photo.intrinsicHeight / (width.toFloat() / height)
+        return ratio in (1f - NEAR_SHAPE)..(1f + NEAR_SHAPE)
     }
 
     /** The screen turned (a tablet): the photo on screen fills it again the right way. */
@@ -569,6 +581,8 @@ class PhotoWall(
         // How far ahead a portrait photo is looked for, to pair with one on screen
         private const val PAIR_LOOKAHEAD = 20
         private const val PAIR_GAP_DIVISOR = 90
+        // A photo this close to the screen's shape fills it in the frame (3:2 on 16:10 is 7 %)
+        private const val NEAR_SHAPE = 0.15f
         private const val DRIFT_MS = 30_000L
     }
 }
