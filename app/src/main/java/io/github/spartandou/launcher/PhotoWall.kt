@@ -443,43 +443,50 @@ class PhotoWall(
         val at = (0 until minOf(PAIR_LOOKAHEAD, list.size - 1)).map { (index + it) % list.size }
             .firstOrNull { list[it].portrait } ?: return null
         val second = try { client.download(client.imageUrl(list[at].id)) } catch (e: Exception) { return null }
-        val left = decodeSoftware(first) ?: return null
-        val right = decodeSoftware(second)
-        if (right == null || right.height <= right.width) {
-            left.recycle()
-            right?.recycle()
-            return null
-        }
+        // Sizes first, pixels one photo at a time: at most the pair and one photo on the heap
+        val leftSize = size(first) ?: return null
+        val rightSize = size(second) ?: return null
+        if (rightSize.second <= rightSize.first) return null
         if (at != index) photos = list.toMutableList().also { java.util.Collections.swap(it, at, index) }
         index = (index + 1) % photos.size
 
-        val height = minOf(left.height, right.height, MAX_H)
-        val leftWidth = left.width * height / left.height
-        val rightWidth = right.width * height / right.height
+        val height = minOf(leftSize.second, rightSize.second, MAX_H)
+        val leftWidth = leftSize.first * height / leftSize.second
+        val rightWidth = rightSize.first * height / rightSize.second
         val gap = height / PAIR_GAP_DIVISOR
         val pair = Bitmap.createBitmap(leftWidth + gap + rightWidth, height, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(pair)
         val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
-        android.graphics.Canvas(pair).apply {
-            drawBitmap(left, null, android.graphics.Rect(0, 0, leftWidth, height), paint)
-            drawBitmap(right, null, android.graphics.Rect(leftWidth + gap, 0, leftWidth + gap + rightWidth, height), paint)
+        for ((bytes, left) in listOf(first to 0, second to leftWidth + gap)) {
+            val photo = decodeSoftware(bytes, height) ?: run { pair.recycle(); return null }
+            canvas.drawBitmap(photo, null, android.graphics.Rect(left, 0, left + photo.width * height / photo.height, height), paint)
+            photo.recycle()
         }
-        left.recycle()
-        right.recycle()
         // To the GPU like the other photos, the heap copy freed at once
         val hardware = pair.copy(Bitmap.Config.HARDWARE, false)
         if (hardware != null) pair.recycle()
         return hardware ?: pair
     }
 
-    // As decode, on the heap so it can be drawn into the pair
-    private fun decodeSoftware(bytes: ByteArray): Bitmap? {
+    // Width and height, without decoding a pixel
+    private fun size(bytes: ByteArray): Pair<Int, Int>? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-        if (bounds.outWidth <= 0) return null
-        var inSample = 1
-        while (bounds.outHeight / (inSample * 2) >= MAX_H) inSample *= 2
-        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = inSample })
+        return if (bounds.outWidth > 0 && bounds.outHeight > 0) bounds.outWidth to bounds.outHeight else null
     }
+
+    // On the heap so it can be drawn into the pair, at the smallest power-of-two size still at least
+    // [height] tall (RGB_565: half the memory, a photo has no transparency)
+    private fun decodeSoftware(bytes: ByteArray, height: Int): Bitmap? {
+        val (_, fullHeight) = size(bytes) ?: return null
+        var inSample = 1
+        while (fullHeight / (inSample * 2) >= height) inSample *= 2
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply {
+            inSampleSize = inSample
+            inPreferredConfig = Bitmap.Config.RGB_565
+        })
+    }
+
 
     /**
      * A photo the same way as the screen fills it; the other way (a portrait photo on a landscape
