@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The photo frame: the photos, then frosted cards like the ImmichFrame overlay. Text sizes and
-     spacing are set in code from the screen's shorter side (Frame.fit), in landscape and portrait -->
+<!-- The photo frame: the photos (whole, on their blurred copy), the clock as on the home screen,
+     a frosted card with the photo's date and place, and Home Assistant's notifications -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/frame_root"
     android:layout_width="match_parent"
@@ -17,75 +17,77 @@
         <include layout="@layout/slide" />
     </FrameLayout>
 
-    <!-- Bottom left: time, date, weather, then the values Home Assistant sends -->
-    <FrameLayout
-        android:id="@+id/clock_card"
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="260dp"
+        android:background="@drawable/scrim_top" />
+
+    <!-- The home screen's clock (clock.xml): the time, and beside it the date, the weather and the
+         values Home Assistant sends -->
+    <LinearLayout
+        android:id="@+id/clock_box"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|start">
+        android:layout_gravity="top|start"
+        android:layout_marginStart="56dp"
+        android:layout_marginTop="32dp"
+        android:layout_marginEnd="56dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
-        <io.github.spartandou.launcher.GlassView
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+        <TextClock
+            style="@style/ShadowText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-thin"
+            android:format12Hour="HH:mm"
+            android:format24Hour="HH:mm"
+            android:includeFontPadding="false"
+            android:letterSpacing="-0.02"
+            android:textSize="60sp" />
 
-        <!-- match_parent: with the glass, two such children, so the card (wrap_content) sizes
-             itself on this content and then stretches both; with one, the glass stays 0 x 0 -->
         <LinearLayout
-            android:id="@+id/clock_content"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="18dp"
             android:orientation="vertical">
 
             <TextClock
-                android:id="@+id/frame_time"
-                style="@style/GlassText"
+                style="@style/ShadowText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:fontFamily="sans-serif-thin"
-                android:format12Hour="HH:mm"
-                android:format24Hour="HH:mm"
-                android:fontFeatureSettings="tnum"
-                android:includeFontPadding="false"
-                android:letterSpacing="-0.02" />
-
-            <TextClock
-                android:id="@+id/frame_date"
-                style="@style/GlassText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:alpha="0.85"
+                android:alpha="0.9"
                 android:fontFamily="sans-serif-medium"
                 android:format12Hour="EEEE d MMMM"
                 android:format24Hour="EEEE d MMMM"
                 android:letterSpacing="0.16"
-                android:textAllCaps="true" />
+                android:textAllCaps="true"
+                android:textSize="13sp" />
 
-            <!-- Today's weather, or tomorrow's in the evening -->
             <TextView
                 android:id="@+id/weather"
-                style="@style/GlassText"
+                style="@style/ShadowText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:drawablePadding="7dp"
                 android:fontFamily="sans-serif-light"
                 android:gravity="center_vertical"
+                android:textSize="15sp"
                 android:visibility="gone" />
 
-            <View
-                android:id="@+id/sensors_rule"
-                android:layout_width="match_parent"
-                android:layout_height="1px"
-                android:background="#2EFFFFFF"
-                android:visibility="gone" />
-
-            <!-- Built in code: icon, value, smaller unit -->
+            <!-- Built in code: emoji, value, smaller unit, each centred on the line -->
             <LinearLayout
                 android:id="@+id/sensors"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:baselineAligned="false"
+                android:gravity="center_vertical"
                 android:orientation="horizontal"
                 android:visibility="gone" />
         </LinearLayout>
-    </FrameLayout>
+    </LinearLayout>
 
     <!-- Bottom right: the photo's date over its place, filled by the photo wall -->
     <FrameLayout
@@ -99,6 +101,8 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
+        <!-- match_parent: with the glass, two such children, so the card (wrap_content) sizes
+             itself on this content and then stretches both; with one, the glass stays 0 x 0 -->
         <LinearLayout
             android:id="@+id/caption_content"
             android:layout_width="match_parent"
@@ -156,23 +160,23 @@
         </LinearLayout>
     </FrameLayout>
 
-    <!-- Notifications, newest on top, centred pills built in code -->
+    <!-- Notifications, newest on top, pills built in code, top right: the clock has the left -->
     <LinearLayout
         android:id="@+id/notes"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="top"
-        android:gravity="center_horizontal"
+        android:gravity="end"
         android:orientation="vertical" />
 
-    <!-- Touch only: shown by a tap, built in code -->
-    <LinearLayout
-        android:id="@+id/controls"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+    <!-- Touch only: pause or play, shown a moment when the middle of the screen is tapped -->
+    <ImageView
+        android:id="@+id/pause_mark"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
         android:layout_gravity="center"
         android:alpha="0"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:visibility="gone" />
+        android:background="@drawable/mark_background"
+        android:importantForAccessibility="no"
+        android:padding="20dp" />
 </FrameLayout>

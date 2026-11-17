@@ -38,9 +38,13 @@ class PhotoWall(
     private val caption: TextView,
     private val captionDate: TextView,
     private val prefs: Prefs,
-    // The photo frame's card: the date and the place each on its own line (their icons are their
-    // rows' first child), instead of the home screen's single "pin, place · date" line
-    private val stacked: Boolean = false,
+    /**
+     * The photo frame, as ImmichFrame shows photos: always whole on their blurred copy (never
+     * cropped), always slowly zooming, two portrait photos side by side on a landscape screen, and
+     * the caption card with the date and the place each on its own line (their icons are their
+     * rows' first child) instead of the home screen's single "pin, place · date" line.
+     */
+    private val frame: Boolean = false,
     // Each new photo's blurred copy, for the automatic accent colour
     private val onPhoto: (Bitmap) -> Unit,
 ) {
@@ -234,13 +238,25 @@ class PhotoWall(
                     val photo = photos[index % photos.size]
                     index = (index + 1) % photos.size
                     val bytes = client.download(client.imageUrl(photo.id))
-                    val bitmap = decode(bytes)
-                    if (bitmap != null) {
-                        val portrait = photo.portrait || bitmap.height > bitmap.width
+                    val decoded = decode(bytes)
+                    if (decoded != null) {
+                        var bitmap: Bitmap = decoded
+                        var portrait = photo.portrait || decoded.height > decoded.width
+                        // The frame on a landscape screen: a portrait photo shares it with the next one
+                        if (frame && portrait && !screenPortrait()) {
+                            val pair = pairedWith(client, bytes)
+                            if (pair != null) {
+                                decoded.recycle()
+                                bitmap = pair
+                                portrait = false
+                            }
+                        }
                         val blur = Blur.fromJpeg(bytes)
                         lastPhotoFile.writeBytes(bytes)
                         shown = true
-                        main.post { if (started && !media) display(bitmap, blur, portrait, photo) else drop(bitmap, blur) }
+                        val shownBitmap = bitmap
+                        val shownPortrait = portrait
+                        main.post { if (started && !media) display(shownBitmap, blur, shownPortrait, photo) else drop(shownBitmap, blur) }
                     }
                 }
             } catch (e: Exception) {
@@ -343,7 +359,7 @@ class PhotoWall(
         val date = photo?.date?.takeIf { prefs.showDate }
         captionBox.animate().cancel()
         captionBox.alpha = 0f
-        if (stacked) {
+        if (frame) {
             caption.text = place.orEmpty()
             captionDate.text = date.orEmpty()
             row(caption).visibility = if (place != null) View.VISIBLE else View.GONE
@@ -362,7 +378,7 @@ class PhotoWall(
         current = null
         captionBox.animate().cancel()
         caption.text = text
-        if (stacked) {
+        if (frame) {
             row(captionDate).visibility = View.GONE
             row(caption).visibility = View.VISIBLE
             row(caption).getChildAt(0).visibility = View.GONE
@@ -391,12 +407,12 @@ class PhotoWall(
         drifts.remove(slide)?.cancel()
         slide.scaleX = 1f
         slide.scaleY = 1f
-        if (!prefs.drift) return
+        if (!prefs.drift && !frame) return
         slide.pivotX = slide.width * Random.nextFloat()
         slide.pivotY = slide.height * Random.nextFloat()
         drifts[slide] = ObjectAnimator.ofPropertyValuesHolder(slide,
-            PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, DRIFT_SCALE),
-            PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, DRIFT_SCALE)).apply {
+            PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, if (frame) FRAME_ZOOM else DRIFT_SCALE),
+            PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, if (frame) FRAME_ZOOM else DRIFT_SCALE)).apply {
             duration = DRIFT_MS
             repeatCount = ValueAnimator.INFINITE
             repeatMode = ValueAnimator.REVERSE
@@ -413,6 +429,58 @@ class PhotoWall(
 
     private fun photoView(i: Int) = slides[i].getChildAt(1) as ImageView
 
+    private fun screenPortrait() =
+        context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+
+    /**
+     * Worker thread. The next portrait photo of the list (a few ahead at most), moved up so the
+     * slideshow goes on after it, and drawn beside [first] with a thin gap: one picture, shown
+     * whole on the first one's blurred copy. Null when there is none, or it does not load.
+     */
+    private fun pairedWith(client: ImmichClient, first: ByteArray): Bitmap? {
+        val list = photos
+        if (list.size < 2) return null
+        val at = (0 until minOf(PAIR_LOOKAHEAD, list.size - 1)).map { (index + it) % list.size }
+            .firstOrNull { list[it].portrait } ?: return null
+        val second = try { client.download(client.imageUrl(list[at].id)) } catch (e: Exception) { return null }
+        val left = decodeSoftware(first) ?: return null
+        val right = decodeSoftware(second)
+        if (right == null || right.height <= right.width) {
+            left.recycle()
+            right?.recycle()
+            return null
+        }
+        if (at != index) photos = list.toMutableList().also { java.util.Collections.swap(it, at, index) }
+        index = (index + 1) % photos.size
+
+        val height = minOf(left.height, right.height, MAX_H)
+        val leftWidth = left.width * height / left.height
+        val rightWidth = right.width * height / right.height
+        val gap = height / PAIR_GAP_DIVISOR
+        val pair = Bitmap.createBitmap(leftWidth + gap + rightWidth, height, Bitmap.Config.ARGB_8888)
+        val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+        android.graphics.Canvas(pair).apply {
+            drawBitmap(left, null, android.graphics.Rect(0, 0, leftWidth, height), paint)
+            drawBitmap(right, null, android.graphics.Rect(leftWidth + gap, 0, leftWidth + gap + rightWidth, height), paint)
+        }
+        left.recycle()
+        right.recycle()
+        // To the GPU like the other photos, the heap copy freed at once
+        val hardware = pair.copy(Bitmap.Config.HARDWARE, false)
+        if (hardware != null) pair.recycle()
+        return hardware ?: pair
+    }
+
+    // As decode, on the heap so it can be drawn into the pair
+    private fun decodeSoftware(bytes: ByteArray): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0) return null
+        var inSample = 1
+        while (bounds.outHeight / (inSample * 2) >= MAX_H) inSample *= 2
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = inSample })
+    }
+
     /**
      * A photo the same way as the screen fills it; the other way (a portrait photo on a landscape
      * screen, or the reverse on a tablet held upright) it is shown whole, on a blurred, darkened
@@ -420,7 +488,7 @@ class PhotoWall(
      */
     private fun fit(i: Int, portrait: Boolean, blur: Bitmap?) {
         val screenPortrait = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
-        val whole = portrait != screenPortrait
+        val whole = frame || portrait != screenPortrait
         photoView(i).scaleType = if (whole) ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_CROP
         (slides[i].getChildAt(0) as ImageView).setImageBitmap(if (whole) blur else null)
     }
@@ -457,6 +525,11 @@ class PhotoWall(
         private const val MAX_H = 1080
         // 3 % over 30 s, then back: barely noticed, the photo just breathes
         private const val DRIFT_SCALE = 1.03f
+        // The frame's zoom, a little more marked, as ImmichFrame's
+        private const val FRAME_ZOOM = 1.08f
+        // How far ahead a portrait photo is looked for, to pair with one on screen
+        private const val PAIR_LOOKAHEAD = 20
+        private const val PAIR_GAP_DIVISOR = 90
         private const val DRIFT_MS = 30_000L
     }
 }

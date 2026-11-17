@@ -2,7 +2,6 @@ package io.github.spartandou.launcher
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -41,20 +40,14 @@ class Frame(
     private val wall: PhotoWall
     private val weather = WeatherLine(root.findViewById(R.id.weather), prefs, worker)
     private val server = FrameServer(prefs.frameKey, this)
-    private val clockCard: View = root.findViewById(R.id.clock_card)
+    private val clockBox: View = root.findViewById(R.id.clock_box)
     private val captionCard: View = root.findViewById(R.id.caption_box)
     private val sensors: LinearLayout = root.findViewById(R.id.sensors)
-    private val sensorsRule: View = root.findViewById(R.id.sensors_rule)
     private val notes: LinearLayout = root.findViewById(R.id.notes)
-    private val controls: LinearLayout = root.findViewById(R.id.controls)
-    private var pauseButton: ImageView? = null
+    private val pauseMark: ImageView = root.findViewById(R.id.pause_mark)
     private var sourceKey = prefs.sourceKey
     // 1% of the screen's shorter side: the cards are sized on it, as ImmichFrame's overlay (vmin)
     private var vmin = 0f
-
-    private val hideControls = Runnable {
-        controls.animate().alpha(0f).setDuration(400).withEndAction { controls.visibility = View.GONE }.start()
-    }
 
     // Weather and the age of what Home Assistant sent, checked now and then
     private val tick = object : Runnable {
@@ -70,8 +63,8 @@ class Frame(
     init {
         val slides = root.findViewById<FrameLayout>(R.id.slides)
         wall = PhotoWall(context, listOf(slides.getChildAt(0) as FrameLayout, slides.getChildAt(1) as FrameLayout),
-            captionCard, root.findViewById(R.id.caption), root.findViewById(R.id.caption_date), prefs, stacked = true) {}
-        if (touch) buildControls()
+            captionCard, root.findViewById(R.id.caption), root.findViewById(R.id.caption_date), prefs, frame = true) {}
+        if (touch) buildGestures()
         root.addOnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
             val size = minOf(right - left, bottom - top) / 100f
             if (size > 0 && size != vmin) {
@@ -80,7 +73,7 @@ class Frame(
             }
         }
         // Tapping the clock opens Home Assistant, as on ImmichFrame
-        if (touch) clockCard.setOnClickListener { openHomeAssistant() }
+        if (touch) clockBox.setOnClickListener { openHomeAssistant() }
     }
 
     fun start() {
@@ -98,7 +91,6 @@ class Frame(
         server.stop()
         main.removeCallbacks(tick)
         main.removeCallbacks(endOfNote)
-        main.removeCallbacks(hideControls)
         wall.stop()
     }
 
@@ -168,10 +160,8 @@ class Frame(
         if (values != shownValues) {
             shownValues = values
             sensors.removeAllViews()
-            values.forEachIndexed { i, value -> sensors.addView(valueView(value), LinearLayout.LayoutParams(-2, -2).apply { if (i > 0) marginStart = px(2.4f) }) }
-            val shown = if (values.isEmpty()) View.GONE else View.VISIBLE
-            sensors.visibility = shown
-            sensorsRule.visibility = shown
+            values.forEachIndexed { i, value -> sensors.addView(valueView(value), LinearLayout.LayoutParams(-2, -2).apply { if (i > 0) marginStart = dp(18) }) }
+            sensors.visibility = if (values.isEmpty()) View.GONE else View.VISIBLE
         }
 
         val current = Overlay.notes(now).toList()
@@ -190,22 +180,9 @@ class Frame(
      */
     private fun fit() {
         val margin = px(3f)
-        (clockCard.layoutParams as FrameLayout.LayoutParams).setMargins(margin, 0, margin, margin)
         (captionCard.layoutParams as FrameLayout.LayoutParams).setMargins(margin, 0, margin, margin)
-        clockCard.requestLayout()
         captionCard.requestLayout()
-        glass(clockCard, 4.4f)
         glass(captionCard, 3f)
-
-        root.findViewById<View>(R.id.clock_content).setPadding(px(3.2f), px(2.2f), px(3.2f), px(2.4f))
-        size(R.id.frame_time, 7.5f)
-        size(R.id.frame_date, 1.7f).apply { (layoutParams as LinearLayout.LayoutParams).topMargin = px(0.8f) }
-        size(R.id.weather, 2f).apply {
-            (layoutParams as LinearLayout.LayoutParams).topMargin = px(0.8f)
-            compoundDrawablePadding = px(0.8f)
-        }
-        (sensorsRule.layoutParams as LinearLayout.LayoutParams).topMargin = px(1.4f)
-        sensors.setPadding(0, px(1.3f), 0, 0)
 
         root.findViewById<View>(R.id.caption_content).setPadding(px(2.4f), px(1.4f), px(2.4f), px(1.4f))
         size(R.id.caption_date, 2f)
@@ -236,27 +213,31 @@ class Frame(
 
     private fun px(vminSize: Float) = (vmin * vminSize).toInt()
 
-    // Icon, value, then the unit smaller and softer
+    // Emoji, value, then the unit smaller and softer, as the weather line beside the clock. The
+    // emoji is centred on the line, the unit sits on the value's baseline
     private fun valueView(value: Overlay.Value): View = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
-        isBaselineAligned = true
-        fun part(text: String, size: Float, alpha: Float, medium: Boolean) = TextView(context).apply {
+        gravity = android.view.Gravity.CENTER_VERTICAL
+        isBaselineAligned = false
+        fun part(text: String, sp: Float, alpha: Float, family: String) = TextView(context).apply {
             this.text = text
-            setTextAppearance(R.style.GlassText)
-            setTextSize(TypedValue.COMPLEX_UNIT_PX, vmin * size)
+            setTextAppearance(R.style.ShadowText)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
+            typeface = android.graphics.Typeface.create(family, android.graphics.Typeface.NORMAL)
+            includeFontPadding = false
             this.alpha = alpha
-            if (medium) {
-                typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
-                fontFeatureSettings = "tnum"
-            }
             maxLines = 1
         }
-        if (value.icon.isNotEmpty()) addView(part(value.icon, 2.2f, 1f, false), LinearLayout.LayoutParams(-2, -2).apply { marginEnd = px(0.6f) })
-        addView(part(value.value, 2.2f, 1f, true))
-        if (value.unit.isNotEmpty()) addView(part(value.unit, 2.2f * 0.75f, 0.75f, false), LinearLayout.LayoutParams(-2, -2).apply { marginStart = px(0.2f) })
+        if (value.icon.isNotEmpty()) addView(part(value.icon, 15f, 1f, "sans-serif"), LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(6) })
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            isBaselineAligned = true
+            addView(part(value.value, 15f, 1f, "sans-serif-medium").apply { fontFeatureSettings = "tnum" })
+            if (value.unit.isNotEmpty()) addView(part(value.unit, 12f, 0.75f, "sans-serif-light"), LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(2) })
+        })
     }
 
-    // A frosted pill at the top, centred; a linked one ends with "›"
+    // A frosted pill at the top right (the clock has the left); a linked one ends with "›"
     private fun noteCard(note: Overlay.Note): View {
         val card = FrameLayout(context)
         card.addView(GlassView(context).apply { tint = GLASS_TINT; cornerRadius = px(3f).toFloat() }, FrameLayout.LayoutParams(-1, -1))
@@ -268,7 +249,7 @@ class Frame(
             setTextSize(TypedValue.COMPLEX_UNIT_PX, vmin * 2.4f)
             gravity = android.view.Gravity.CENTER
             maxLines = 5
-            maxWidth = (root.width * 0.7f).toInt()
+            maxWidth = (root.width * 0.4f).toInt()
             setLineSpacing(0f, 1.3f)
             setPadding(px(2.6f), px(1.2f), px(2.6f), px(1.2f))
         }, FrameLayout.LayoutParams(-1, -1)) // match_parent, as the glass: see frame.xml
@@ -298,28 +279,29 @@ class Frame(
 
     // --- Touch ---
 
-    private fun buildControls() {
-        fun button(icon: Int, label: Int, onClick: () -> Unit) = ImageView(context).apply {
-            setImageResource(icon)
-            contentDescription = context.getString(label)
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0x8C000000.toInt()) }
-            setPadding(dp(16), dp(16), dp(16), dp(16))
-            setOnClickListener { onClick(); showControls() }
-            controls.addView(this, LinearLayout.LayoutParams(dp(60), dp(60)).apply { marginStart = dp(10); marginEnd = dp(10) })
-        }
-        button(R.drawable.ic_previous, R.string.frame_previous) { wall.skip(-1) }
-        pauseButton = button(R.drawable.ic_pause, R.string.frame_pause) { setPaused(!wall.paused) }
-        button(R.drawable.ic_next, R.string.frame_next) { wall.skip() }
-        button(R.drawable.ic_settings, R.string.settings_name) { onSettings() }
-        button(R.drawable.ic_close, R.string.frame_close) { onClose() }
-
+    /**
+     * As on ImmichFrame, invisible and always there: the left third goes back a photo, the right
+     * third forward, the middle pauses or plays (a mark shows which a moment); a swipe changes the
+     * photo too, a long press opens the settings.
+     */
+    private fun buildGestures() {
         val gestures = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDown(e: MotionEvent) = true
 
             override fun onSingleTapUp(e: MotionEvent): Boolean {
-                if (controls.visibility == View.VISIBLE) { main.removeCallbacks(hideControls); hideControls.run() } else showControls()
+                val third = root.width / 3f
+                when {
+                    e.x < third -> wall.skip(-1)
+                    e.x > 2 * third -> wall.skip()
+                    else -> {
+                        setPaused(!wall.paused)
+                        showPauseMark()
+                    }
+                }
                 return true
             }
+
+            override fun onLongPress(e: MotionEvent) = onSettings()
 
             override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
                 if (abs(velocityX) < abs(velocityY) * 2 || abs(velocityX) < dp(400)) return false
@@ -333,18 +315,15 @@ class Frame(
         }
     }
 
-    private fun showControls() {
-        main.removeCallbacks(hideControls)
-        controls.animate().cancel()
-        controls.visibility = View.VISIBLE
-        controls.animate().alpha(1f).setDuration(150).start()
-        main.postDelayed(hideControls, CONTROLS_MS)
+    private fun showPauseMark() {
+        pauseMark.setImageResource(if (wall.paused) R.drawable.ic_pause else R.drawable.ic_play)
+        pauseMark.animate().cancel()
+        pauseMark.alpha = 1f
+        pauseMark.animate().alpha(0f).setStartDelay(PAUSE_MARK_MS).setDuration(400).start()
     }
 
     private fun setPaused(paused: Boolean) {
         wall.paused = paused
-        pauseButton?.setImageResource(if (paused) R.drawable.ic_play else R.drawable.ic_pause)
-        pauseButton?.contentDescription = context.getString(if (paused) R.string.frame_resume else R.string.frame_pause)
     }
 
     private fun dp(value: Int) = Tiles.dp(context, value)
@@ -352,7 +331,7 @@ class Frame(
     companion object {
         private const val TAG = "Frame"
         private const val TICK_MS = 30_000L
-        private const val CONTROLS_MS = 5_000L
+        private const val PAUSE_MARK_MS = 900L
         private const val HOME_ASSISTANT = "io.homeassistant.companion.android"
         // ImmichFrame's cards: 18 % of a dark tint over the blurred photo
         private const val GLASS_TINT = 0x2E000000
