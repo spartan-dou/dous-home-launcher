@@ -64,9 +64,10 @@ object Apps {
      */
     fun tileImage(context: Context, app: App, width: Int): TileImage {
         val pm = context.packageManager
-        val banner = app.info.loadBanner(pm) ?: app.info.applicationInfo.loadBanner(pm)
+        // A tablet shows icons only: TV banners among them made a patchwork
+        val banner = if (context.isTv()) app.info.loadBanner(pm) ?: app.info.applicationInfo.loadBanner(pm) else null
         if (banner != null) return TileImage(render(context, banner, width, Tiles.height(width)), null)
-        val size = Tiles.dp(context, 44)
+        val size = Tiles.iconSize(context, width)
         return TileImage(null, render(context, app.info.loadIcon(pm), size, size))
     }
 

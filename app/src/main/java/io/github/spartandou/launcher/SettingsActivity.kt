@@ -52,6 +52,7 @@ class SettingsActivity : Activity() {
     private var editedRow = -1
     private var apps: List<App>? = null
     private var rendering = false
+    private var menuItems: List<View> = emptyList()
 
     // Away from a TV (a tablet), what needs Android TV is left out: the apps' programs and the remote
     private val sections by lazy {
@@ -121,6 +122,16 @@ class SettingsActivity : Activity() {
         contentScroll = ScrollView(this).apply { addView(content); isFillViewport = true; isFocusable = false }
         root.addView(contentScroll, LinearLayout.LayoutParams(0, -1, 1f))
         setContentView(root)
+        if (!isTv()) {
+            // Tablet: no light veil on the navigation bar, and nothing under it
+            window.isNavigationBarContrastEnforced = false
+            root.setOnApplyWindowInsetsListener { view, insets ->
+                val bars = insets.getInsets(android.view.WindowInsets.Type.systemBars())
+                view.setPadding(bars.left, 0, bars.right, bars.bottom)
+                insets
+            }
+        }
+        menuItems = items
 
         // Labels of the installed apps, for the rows section
         Thread { val loaded = Apps.load(this); main.post { apps = loaded } }.start()
@@ -149,6 +160,10 @@ class SettingsActivity : Activity() {
     private fun show(i: Int) {
         if (i == section) return
         section = i
+        // A finger leaves no focus: the section shown stays marked in the menu (the TV has its focus)
+        if (!isTv()) menuItems.forEachIndexed { index, item ->
+            item.background = rounded(focusColor, if (index == i) SELECTED_ITEM else Color.TRANSPARENT)
+        }
         editedRow = -1
         // The phone page is only served while its QR code is on screen
         if (i == sections.lastIndex) startSetup() else stopSetup()
@@ -719,6 +734,7 @@ class SettingsActivity : Activity() {
 
     companion object {
         private const val REQUEST_HOME = 2
+        private const val SELECTED_ITEM = 0x24FFFFFF
         private val NAVIGATION_KEYS = setOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_HOME,

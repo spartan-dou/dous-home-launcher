@@ -117,6 +117,7 @@
             android:layout_gravity="end"
             android:layout_marginTop="50dp"
             android:layout_marginEnd="60dp"
+            android:id="@+id/all_apps_hint"
             android:text="@string/all_apps_hint"
             android:textColor="#B3FFFFFF"
             android:textSize="14sp" />

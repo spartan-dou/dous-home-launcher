@@ -3,6 +3,7 @@
     <string name="settings_name">Réglages de l\'accueil</string>
     <string name="all_apps">Toutes les applis</string>
     <string name="all_apps_hint">Appui long sur OK : mettre sur une rangée ou retirer</string>
+    <string name="all_apps_hint_touch">Appui long : mettre sur une rangée ou retirer</string>
 
     <!-- Home screen messages -->
     <string name="server_error">Immich injoignable : %1$s</string>

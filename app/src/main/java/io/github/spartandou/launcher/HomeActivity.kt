@@ -107,6 +107,7 @@ class HomeActivity : Activity() {
         window.isNavigationBarContrastEnforced = false
         window.insetsController?.setSystemBarsAppearance(0, WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
         FrameKeeper.sync(this)
+        if (!isTv()) findViewById<TextView>(R.id.all_apps_hint).setText(R.string.all_apps_hint_touch)
         // The TV is always landscape; a tablet turns freely
         if (isTv()) requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         screenOrientation = resources.configuration.orientation

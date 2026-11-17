@@ -27,6 +27,13 @@ object Tiles {
 
     fun height(width: Int) = width * 9 / 16
 
+    /**
+     * An icon tile's icon: 44 dp on the TV as always; on a tablet as large as the tile leaves room
+     * for, above its name (no small icon lost in a large card).
+     */
+    fun iconSize(context: Context, width: Int): Int =
+        if (context.isTv()) dp(context, 44) else (height(width) - dp(context, 42)).coerceIn(dp(context, 36), dp(context, 64))
+
     /** An empty tile: its picture comes later from [fill], rendered off the main thread. */
     /** [zoom] false: the caller moves and sizes the tiles itself (the carousel). */
     fun create(context: Context, label: String, zoom: Boolean = true, onFocus: (Boolean) -> Unit): FrameLayout {
@@ -91,7 +98,11 @@ object Tiles {
         } else {
             // Phone-style apps have no banner: icon and name on a dark glass tile; an icon alone is centred
             val iconParams = if (label.isEmpty()) FrameLayout.LayoutParams(dp(context, 40), dp(context, 40), Gravity.CENTER)
-            else FrameLayout.LayoutParams(dp(context, 44), dp(context, 44), Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(context, 14) }
+            else if (context.isTv()) FrameLayout.LayoutParams(dp(context, 44), dp(context, 44), Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(context, 14) }
+            // Tablet: the icon at the size it was drawn at for this tile (Tiles.iconSize)
+            else (icon?.intrinsicWidth?.takeIf { it > 0 } ?: dp(context, 44)).let { size ->
+                FrameLayout.LayoutParams(size, size, Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(context, 10) }
+            }
             tile.addView(ImageView(context).apply { setImageDrawable(icon) }, iconParams)
             if (label.isNotEmpty()) tile.addView(TextView(context).apply {
                 text = label
