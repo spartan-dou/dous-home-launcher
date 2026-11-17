@@ -69,7 +69,18 @@ Les mêmes photos en plein écran, avec l'heure, la météo, le lieu et la date 
 **Cadre permanent sur secteur** (tablette, *Réglages → Cadre photo*) : quand l'écran s'éteint pendant la charge (délai d'écran, bouton marche, appli laissée ouverte), il se rallume aussitôt sur le cadre. Débranchée, ou éteinte par Home Assistant (bouton **Éteindre l'écran**), la tablette reste éteinte. Remplace les profils Tasker « Lancer Immich », « Verrouiller Tablette » et « Ha Lock ». Il faut une fois :
 
 - autoriser l'affichage par-dessus les autres applis (bouton dans les réglages, ou `adb shell appops set io.github.spartandou.launcher SYSTEM_ALERT_WINDOW allow`) ; sur Xiaomi, aussi « Afficher les fenêtres pop-up en arrière-plan » et « Démarrage automatique » dans les autorisations de l'appli ;
-- pour le bouton Éteindre l'écran, faire de l'appli un administrateur de l'appareil (bouton dans les réglages, ou `adb shell dpm set-active-admin io.github.spartandou.launcher/.FrameKeeper\$Admin`).
+- pour éteindre l'écran, faire de l'appli un administrateur de l'appareil (bouton dans les réglages, ou `adb shell dpm set-active-admin io.github.spartandou.launcher/.FrameKeeper\$Admin`).
+
+Home Assistant éteint l'écran de deux façons : le bouton **Éteindre l'écran** de l'intégration (cadre affiché), ou à tout moment par l'appli compagnon, comme l'ancien `HA_LOCK` de Tasker :
+
+```yaml
+action: notify.mobile_app_tablette
+data:
+  message: command_broadcast_intent
+  data:
+    intent_package_name: io.github.spartandou.launcher
+    intent_action: io.github.spartandou.launcher.SCREEN_OFF
+```
 
 Seul ce petit service tourne alors en arrière-plan (une notification discrète l'indique) ; il ne fait rien tant que l'écran est allumé.
 

@@ -141,11 +141,20 @@ class FrameKeeper : Service() {
     }
 }
 
-/** Starts the frame keeper again after a reboot or an update. */
+/**
+ * Starts the frame keeper again after a reboot or an update, and turns the screen off when Home
+ * Assistant's app broadcasts [SCREEN_OFF] (command_broadcast_intent): heard even when the frame is
+ * not on screen, as Tasker heard HA_LOCK.
+ */
 class KeeperStarter : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> FrameKeeper.sync(context)
+            SCREEN_OFF -> FrameKeeper.sleep(context)
         }
+    }
+
+    companion object {
+        const val SCREEN_OFF = "io.github.spartandou.launcher.SCREEN_OFF"
     }
 }

@@ -133,12 +133,16 @@
                 android:value="Photo frame shown again whenever the screen goes off while charging" />
         </service>
 
+        <!-- Exported for SCREEN_OFF, sent by Home Assistant's app (command_broadcast_intent) -->
         <receiver
             android:name=".KeeperStarter"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="io.github.spartandou.launcher.SCREEN_OFF" />
             </intent-filter>
         </receiver>
 
