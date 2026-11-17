@@ -41,11 +41,16 @@ class Frame(
     private val wall: PhotoWall
     private val weather = WeatherLine(root.findViewById(R.id.weather), prefs, worker)
     private val server = FrameServer(prefs.frameKey, this)
-    private val sensors: TextView = root.findViewById(R.id.sensors)
+    private val clockCard: View = root.findViewById(R.id.clock_card)
+    private val captionCard: View = root.findViewById(R.id.caption_box)
+    private val sensors: LinearLayout = root.findViewById(R.id.sensors)
+    private val sensorsRule: View = root.findViewById(R.id.sensors_rule)
     private val notes: LinearLayout = root.findViewById(R.id.notes)
     private val controls: LinearLayout = root.findViewById(R.id.controls)
     private var pauseButton: ImageView? = null
     private var sourceKey = prefs.sourceKey
+    // 1% of the screen's shorter side: the cards are sized on it, as ImmichFrame's overlay (vmin)
+    private var vmin = 0f
 
     private val hideControls = Runnable {
         controls.animate().alpha(0f).setDuration(400).withEndAction { controls.visibility = View.GONE }.start()
@@ -65,8 +70,17 @@ class Frame(
     init {
         val slides = root.findViewById<FrameLayout>(R.id.slides)
         wall = PhotoWall(context, listOf(slides.getChildAt(0) as FrameLayout, slides.getChildAt(1) as FrameLayout),
-            root.findViewById(R.id.caption_box), root.findViewById(R.id.caption), root.findViewById(R.id.caption_date), prefs) {}
+            captionCard, root.findViewById(R.id.caption), root.findViewById(R.id.caption_date), prefs, stacked = true) {}
         if (touch) buildControls()
+        root.addOnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
+            val size = minOf(right - left, bottom - top) / 100f
+            if (size > 0 && size != vmin) {
+                vmin = size
+                fit()
+            }
+        }
+        // Tapping the clock opens Home Assistant, as on ImmichFrame
+        if (touch) clockCard.setOnClickListener { openHomeAssistant() }
     }
 
     fun start() {
@@ -126,6 +140,8 @@ class Frame(
             "next" -> wall.skip()
             "previous" -> wall.skip(-1)
             "close" -> onClose()
+            // The screen off and left off (Tasker's former HA_LOCK); needs the device admin
+            "screen_off" -> return FrameKeeper.sleep(context)
             else -> return false
         }
         return true
@@ -144,12 +160,19 @@ class Frame(
     // --- Notifications and values ---
 
     private var shownNotes: List<Overlay.Note> = emptyList()
+    private var shownValues: List<Overlay.Value> = emptyList()
 
     private fun showOverlay() {
         val now = System.currentTimeMillis()
-        val values = Overlay.values(now).joinToString("     ") { listOf(it.icon, it.text).filter(String::isNotEmpty).joinToString(" ") }
-        sensors.text = values
-        sensors.visibility = if (values.isEmpty()) View.GONE else View.VISIBLE
+        val values = Overlay.values(now).toList()
+        if (values != shownValues) {
+            shownValues = values
+            sensors.removeAllViews()
+            values.forEachIndexed { i, value -> sensors.addView(valueView(value), LinearLayout.LayoutParams(-2, -2).apply { if (i > 0) marginStart = px(2.4f) }) }
+            val shown = if (values.isEmpty()) View.GONE else View.VISIBLE
+            sensors.visibility = shown
+            sensorsRule.visibility = shown
+        }
 
         val current = Overlay.notes(now).toList()
         if (current != shownNotes) {
@@ -161,22 +184,106 @@ class Frame(
         Overlay.nextEnd().takeIf { it > 0 }?.let { main.postDelayed(endOfNote, (it - now).coerceAtLeast(0) + 500) }
     }
 
-    // A frosted card, like the home screen's surfaces
+    /**
+     * Sizes everything on the screen's shorter side, as ImmichFrame's overlay does (its CSS in
+     * vmin): the same look in landscape and portrait, on the tablet and on the TV.
+     */
+    private fun fit() {
+        val margin = px(3f)
+        (clockCard.layoutParams as FrameLayout.LayoutParams).setMargins(margin, 0, margin, margin)
+        (captionCard.layoutParams as FrameLayout.LayoutParams).setMargins(margin, 0, margin, margin)
+        clockCard.requestLayout()
+        captionCard.requestLayout()
+        glass(clockCard, 4.4f)
+        glass(captionCard, 3f)
+
+        root.findViewById<View>(R.id.clock_content).setPadding(px(3.2f), px(2.2f), px(3.2f), px(2.4f))
+        size(R.id.frame_time, 7.5f)
+        size(R.id.frame_date, 1.7f).apply { (layoutParams as LinearLayout.LayoutParams).topMargin = px(0.8f) }
+        size(R.id.weather, 2f).apply {
+            (layoutParams as LinearLayout.LayoutParams).topMargin = px(0.8f)
+            compoundDrawablePadding = px(0.8f)
+        }
+        (sensorsRule.layoutParams as LinearLayout.LayoutParams).topMargin = px(1.4f)
+        sensors.setPadding(0, px(1.3f), 0, 0)
+
+        root.findViewById<View>(R.id.caption_content).setPadding(px(2.4f), px(1.4f), px(2.4f), px(1.4f))
+        size(R.id.caption_date, 2f)
+        size(R.id.caption, 2.1f).apply {
+            maxWidth = (root.width * 0.4f).toInt()
+            ((parent as View).layoutParams as LinearLayout.LayoutParams).topMargin = px(0.3f)
+        }
+        listOf(R.id.caption_date_icon, R.id.caption_place_icon).forEach { id ->
+            root.findViewById<View>(id).layoutParams = LinearLayout.LayoutParams(px(2.2f), px(2.2f)).apply { marginEnd = px(0.8f) }
+        }
+
+        notes.setPadding(margin, margin, margin, 0)
+        // Built again at the new size
+        shownNotes = emptyList()
+        shownValues = emptyList()
+        showOverlay()
+    }
+
+    private fun glass(card: View, radius: Float) {
+        ((card as FrameLayout).getChildAt(0) as GlassView).apply {
+            cornerRadius = px(radius).toFloat()
+            tint = GLASS_TINT
+        }
+    }
+
+    private fun size(id: Int, vminSize: Float): TextView =
+        root.findViewById<TextView>(id).apply { setTextSize(TypedValue.COMPLEX_UNIT_PX, vmin * vminSize) }
+
+    private fun px(vminSize: Float) = (vmin * vminSize).toInt()
+
+    // Icon, value, then the unit smaller and softer
+    private fun valueView(value: Overlay.Value): View = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL
+        isBaselineAligned = true
+        fun part(text: String, size: Float, alpha: Float, medium: Boolean) = TextView(context).apply {
+            this.text = text
+            setTextAppearance(R.style.GlassText)
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, vmin * size)
+            this.alpha = alpha
+            if (medium) {
+                typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+                fontFeatureSettings = "tnum"
+            }
+            maxLines = 1
+        }
+        if (value.icon.isNotEmpty()) addView(part(value.icon, 2.2f, 1f, false), LinearLayout.LayoutParams(-2, -2).apply { marginEnd = px(0.6f) })
+        addView(part(value.value, 2.2f, 1f, true))
+        if (value.unit.isNotEmpty()) addView(part(value.unit, 2.2f * 0.75f, 0.75f, false), LinearLayout.LayoutParams(-2, -2).apply { marginStart = px(0.2f) })
+    }
+
+    // A frosted pill at the top, centred; a linked one ends with "›"
     private fun noteCard(note: Overlay.Note): View {
         val card = FrameLayout(context)
-        card.addView(GlassView(context).apply { tint = 0x73000000 }, FrameLayout.LayoutParams(-1, -1))
-        card.addView(TextView(context).apply {
-            text = note.message
-            setTextColor(0xFFFFFFFF.toInt())
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
-            maxLines = 5
-            setLineSpacing(0f, 1.15f)
-            setPadding(dp(20), dp(14), dp(20), dp(14))
-        }, FrameLayout.LayoutParams(-1, -2))
-        card.layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }
+        card.addView(GlassView(context).apply { tint = GLASS_TINT; cornerRadius = px(3f).toFloat() }, FrameLayout.LayoutParams(-1, -1))
         val link = note.link
+        card.addView(TextView(context).apply {
+            text = if (link != null) "${note.message} ›" else note.message
+            setTextAppearance(R.style.GlassText)
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, vmin * 2.4f)
+            gravity = android.view.Gravity.CENTER
+            maxLines = 5
+            maxWidth = (root.width * 0.7f).toInt()
+            setLineSpacing(0f, 1.3f)
+            setPadding(px(2.6f), px(1.2f), px(2.6f), px(1.2f))
+        }, FrameLayout.LayoutParams(-2, -2))
+        card.layoutParams = LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = px(1.2f) }
         if (touch && link != null) card.setOnClickListener { open(link) }
         return card
+    }
+
+    private fun openHomeAssistant() {
+        val intent = context.packageManager.getLaunchIntentForPackage(HOME_ASSISTANT) ?: return
+        try {
+            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (e: Exception) {
+            Log.w(TAG, "Cannot open Home Assistant", e)
+        }
     }
 
     /** "/path" is a Home Assistant view, opened by its app; other links are opened as they are. */
@@ -246,5 +353,8 @@ class Frame(
         private const val TAG = "Frame"
         private const val TICK_MS = 30_000L
         private const val CONTROLS_MS = 5_000L
+        private const val HOME_ASSISTANT = "io.homeassistant.companion.android"
+        // ImmichFrame's cards: 18 % of a dark tint over the blurred photo
+        private const val GLASS_TINT = 0x2E000000
     }
 }

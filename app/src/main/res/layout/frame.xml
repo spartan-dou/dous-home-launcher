@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The photo frame: the photos, the clock, and what Home Assistant sends -->
+<!-- The photo frame: the photos, then frosted cards like the ImmichFrame overlay. Text sizes and
+     spacing are set in code from the screen's shorter side (Frame.fit), in landscape and portrait -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/frame_root"
     android:layout_width="match_parent"
@@ -16,21 +17,150 @@
         <include layout="@layout/slide" />
     </FrameLayout>
 
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="260dp"
-        android:background="@drawable/scrim_top" />
+    <!-- Bottom left: time, date, weather, then the values Home Assistant sends -->
+    <FrameLayout
+        android:id="@+id/clock_card"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start">
 
-    <include layout="@layout/clock" />
+        <io.github.spartandou.launcher.GlassView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
 
-    <!-- Notifications, newest on top, built in code -->
+        <LinearLayout
+            android:id="@+id/clock_content"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextClock
+                android:id="@+id/frame_time"
+                style="@style/GlassText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-thin"
+                android:format12Hour="HH:mm"
+                android:format24Hour="HH:mm"
+                android:fontFeatureSettings="tnum"
+                android:includeFontPadding="false"
+                android:letterSpacing="-0.02" />
+
+            <TextClock
+                android:id="@+id/frame_date"
+                style="@style/GlassText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:alpha="0.85"
+                android:fontFamily="sans-serif-medium"
+                android:format12Hour="EEEE d MMMM"
+                android:format24Hour="EEEE d MMMM"
+                android:letterSpacing="0.16"
+                android:textAllCaps="true" />
+
+            <!-- Today's weather, or tomorrow's in the evening -->
+            <TextView
+                android:id="@+id/weather"
+                style="@style/GlassText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-light"
+                android:gravity="center_vertical"
+                android:visibility="gone" />
+
+            <View
+                android:id="@+id/sensors_rule"
+                android:layout_width="match_parent"
+                android:layout_height="1px"
+                android:background="#2EFFFFFF"
+                android:visibility="gone" />
+
+            <!-- Built in code: icon, value, smaller unit -->
+            <LinearLayout
+                android:id="@+id/sensors"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:visibility="gone" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- Bottom right: the photo's date over its place, filled by the photo wall -->
+    <FrameLayout
+        android:id="@+id/caption_box"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:alpha="0">
+
+        <io.github.spartandou.launcher.GlassView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <LinearLayout
+            android:id="@+id/caption_content"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:id="@+id/caption_date_icon"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:alpha="0.7"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_calendar" />
+
+                <TextView
+                    android:id="@+id/caption_date"
+                    style="@style/GlassText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:alpha="0.8"
+                    android:fontFamily="sans-serif"
+                    android:maxLines="1" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:id="@+id/caption_place_icon"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:alpha="0.7"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_place" />
+
+                <TextView
+                    android:id="@+id/caption"
+                    style="@style/GlassText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:fontFamily="sans-serif-medium"
+                    android:maxLines="1" />
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- Notifications, newest on top, centred pills built in code -->
     <LinearLayout
         android:id="@+id/notes"
-        android:layout_width="380dp"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="top|end"
-        android:layout_marginTop="28dp"
-        android:layout_marginEnd="36dp"
+        android:layout_gravity="top"
+        android:gravity="center_horizontal"
         android:orientation="vertical" />
 
     <!-- Touch only: shown by a tap, built in code -->
@@ -38,8 +168,7 @@
         android:id="@+id/controls"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="36dp"
+        android:layout_gravity="center"
         android:alpha="0"
         android:gravity="center_vertical"
         android:orientation="horizontal"

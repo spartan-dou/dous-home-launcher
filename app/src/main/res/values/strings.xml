@@ -180,6 +180,13 @@
     <string name="frame_close">Fermer le cadre</string>
     <string name="section_frame">Cadre photo</string>
     <string name="frame_open">Afficher le cadre maintenant</string>
+    <string name="keeper_channel">Cadre permanent</string>
+    <string name="keeper_notification">Le cadre revient quand l\'écran s\'éteint sur secteur</string>
+    <string name="keeper_option">Cadre permanent sur secteur</string>
+    <string name="keeper_hint">Quand l\'écran s\'éteint pendant la charge, il se rallume sur le cadre (ce que faisait Tasker). Débranchée, ou éteinte par Home Assistant, la tablette reste éteinte.</string>
+    <string name="keeper_overlay">Autoriser l\'ouverture du cadre en arrière-plan…</string>
+    <string name="keeper_admin">Autoriser Home Assistant à éteindre l\'écran…</string>
+    <string name="keeper_admin_why">Seulement pour éteindre l\'écran quand Home Assistant le demande.</string>
     <string name="home_open">Ouvrir l\'écran d\'accueil</string>
     <string name="home_default">Choisir l\'écran d\'accueil par défaut…</string>
     <string name="home_is_default">C\'est l\'écran d\'accueil par défaut de la tablette.</string>

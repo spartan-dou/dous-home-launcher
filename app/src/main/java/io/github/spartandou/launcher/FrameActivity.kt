@@ -19,6 +19,10 @@ class FrameActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Opened by the frame keeper as the screen goes off: lights it up again, over the lock screen
+        setShowWhenLocked(true)
+        setTurnScreenOn(true)
+        FrameKeeper.sync(this)
         restoreHomeScreen()
         // The home screen is not always used on a tablet: the frame looks for updates too
         val prefs = Prefs(this)

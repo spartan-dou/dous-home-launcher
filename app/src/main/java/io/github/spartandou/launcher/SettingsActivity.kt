@@ -501,6 +501,17 @@ class SettingsActivity : Activity() {
     private fun frameSection() {
         add(action(getString(R.string.frame_open)) { startActivity(Intent(this, FrameActivity::class.java)) })
         if (!isTv()) {
+            // What Tasker did: the frame back whenever the screen goes off on the charger
+            add(check(getString(R.string.keeper_option), prefs.keepFrame) { prefs.keepFrame = it; FrameKeeper.sync(this) })
+            add(hint(getString(R.string.keeper_hint)))
+            if (!android.provider.Settings.canDrawOverlays(this)) add(action(getString(R.string.keeper_overlay)) {
+                startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:$packageName")))
+            })
+            if (!FrameKeeper.canSleep(this)) add(action(getString(R.string.keeper_admin)) {
+                startActivity(Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+                    .putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, FrameKeeper.admin(this))
+                    .putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION, getString(R.string.keeper_admin_why)))
+            })
             // A tablet has no remote Home button leading to it: open it, or make it the device's home screen
             add(action(getString(R.string.home_open)) {
                 restoreHomeScreen()

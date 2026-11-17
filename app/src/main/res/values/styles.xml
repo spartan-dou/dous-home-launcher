@@ -5,4 +5,12 @@
         <item name="android:shadowRadius">8</item>
         <item name="android:shadowDy">1</item>
     </style>
+
+    <!-- Text on the photo frame's frosted cards: a lighter shadow, the glass already sets it apart -->
+    <style name="GlassText">
+        <item name="android:textColor">#FFFFFFFF</item>
+        <item name="android:shadowColor">#59000000</item>
+        <item name="android:shadowRadius">6</item>
+        <item name="android:shadowDy">1</item>
+    </style>
 </resources>

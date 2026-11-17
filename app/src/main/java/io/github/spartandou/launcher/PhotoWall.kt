@@ -38,6 +38,9 @@ class PhotoWall(
     private val caption: TextView,
     private val captionDate: TextView,
     private val prefs: Prefs,
+    // The photo frame's card: the date and the place each on its own line (their icons are their
+    // rows' first child), instead of the home screen's single "pin, place · date" line
+    private val stacked: Boolean = false,
     // Each new photo's blurred copy, for the automatic accent colour
     private val onPhoto: (Bitmap) -> Unit,
 ) {
@@ -340,10 +343,18 @@ class PhotoWall(
         val date = photo?.date?.takeIf { prefs.showDate }
         captionBox.animate().cancel()
         captionBox.alpha = 0f
-        caption.text = place ?: date ?: ""
-        captionDate.text = if (place != null && date != null) "  ·  $date" else ""
-        captionDate.visibility = if (captionDate.text.isEmpty()) View.GONE else View.VISIBLE
-        pin.visibility = if (place != null) View.VISIBLE else View.GONE
+        if (stacked) {
+            caption.text = place.orEmpty()
+            captionDate.text = date.orEmpty()
+            row(caption).visibility = if (place != null) View.VISIBLE else View.GONE
+            row(captionDate).visibility = if (date != null) View.VISIBLE else View.GONE
+            row(caption).getChildAt(0).visibility = View.VISIBLE
+        } else {
+            caption.text = place ?: date ?: ""
+            captionDate.text = if (place != null && date != null) "  ·  $date" else ""
+            captionDate.visibility = if (captionDate.text.isEmpty()) View.GONE else View.VISIBLE
+            pin.visibility = if (place != null) View.VISIBLE else View.GONE
+        }
         if (place != null || date != null) captionBox.animate().alpha(1f).setStartDelay(FADE_MS / 2).setDuration(FADE_MS).start()
     }
 
@@ -351,8 +362,14 @@ class PhotoWall(
         current = null
         captionBox.animate().cancel()
         caption.text = text
-        captionDate.visibility = View.GONE
-        pin.visibility = View.GONE
+        if (stacked) {
+            row(captionDate).visibility = View.GONE
+            row(caption).visibility = View.VISIBLE
+            row(caption).getChildAt(0).visibility = View.GONE
+        } else {
+            captionDate.visibility = View.GONE
+            pin.visibility = View.GONE
+        }
         captionBox.alpha = 1f
     }
 
@@ -363,6 +380,8 @@ class PhotoWall(
     }
 
     private val pin: View get() = (captionBox as android.view.ViewGroup).getChildAt(0)
+
+    private fun row(text: TextView) = text.parent as android.view.ViewGroup
 
     /**
      * The new photo zooms in by a few percent, then back, very slowly, around a random point. Only

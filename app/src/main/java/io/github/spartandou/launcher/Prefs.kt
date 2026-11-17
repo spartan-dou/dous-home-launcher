@@ -42,6 +42,11 @@ class Prefs(context: Context) {
                 .apply()
         }
 
+    /** Tablet: the photo frame comes back whenever the screen goes off on the charger. */
+    var keepFrame: Boolean
+        get() = prefs.getBoolean("keep_frame", false)
+        set(value) = prefs.edit().putBoolean("keep_frame", value).apply()
+
     /** Newer releases are downloaded and installed without being asked for. */
     var autoUpdate: Boolean
         get() = prefs.getBoolean("auto_update", true)

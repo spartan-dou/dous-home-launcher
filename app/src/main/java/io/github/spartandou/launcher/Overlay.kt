@@ -11,7 +11,7 @@ import org.json.JSONObject
 object Overlay {
     class Note(val message: String, val link: String?, val tag: String?, val until: Long)
 
-    class Value(val icon: String, val text: String)
+    class Value(val icon: String, val value: String, val unit: String)
 
     private const val MAX_NOTES = 3
     // Home Assistant sends the values again every minute: older ones are no longer true
@@ -43,19 +43,40 @@ object Overlay {
         }
         notes.removeAll { if (tag != null) it.tag == tag else it.tag == null && it.message == message }
         val minutes = json.optDouble("duration", 0.0).takeIf { !it.isNaN() && it > 0 }
-        notes.add(0, Note(message, json.text("link"), tag, minutes?.let { now + (it * 60_000).toLong() } ?: 0))
+        notes.add(0, Note(emoji(message), json.text("link"), tag, minutes?.let { now + (it * 60_000).toLong() } ?: 0))
         while (notes.size > MAX_NOTES) notes.removeAt(notes.size - 1)
     }
 
     fun setValues(sensors: JSONArray, now: Long) {
         values = (0 until sensors.length()).mapNotNull { sensors.optJSONObject(it) }.mapNotNull { sensor ->
             val value = sensor.text("value") ?: return@mapNotNull null
-            Value(sensor.text("icon").orEmpty(), listOfNotNull(value, sensor.text("unit")).joinToString(" "))
+            Value(emoji(sensor.text("icon").orEmpty()), value, sensor.text("unit").orEmpty())
         }
         valuesTime = now
     }
 
     fun values(now: Long): List<Value> = if (now - valuesTime > VALUES_TTL_MS) emptyList() else values
+
+    /**
+     * A pictograph sent without its emoji selector (🛋, ☀, ❤...) is drawn in black and white:
+     * the selector is added. Not before a selector or a skin tone already there, nor below U+2300
+     * (©, ™, arrows: text), nor to flags' letters or skin tones themselves.
+     */
+    fun emoji(text: String): String {
+        val out = StringBuilder(text.length + 4)
+        var i = 0
+        while (i < text.length) {
+            val c = text.codePointAt(i)
+            out.appendCodePoint(c)
+            i += Character.charCount(c)
+            val pictograph = c in 0x2300..0x2BFF || c in 0x1F000..0x1FAFF
+            val excluded = c in 0x1F1E6..0x1F1FF || c in 0x1F3FB..0x1F3FF
+            val next = if (i < text.length) text.codePointAt(i) else -1
+            val followed = next == 0xFE0E || next == 0xFE0F || next in 0x1F3FB..0x1F3FF
+            if (pictograph && !excluded && !followed) out.append('\uFE0F')
+        }
+        return out.toString()
+    }
 
     private fun JSONObject.text(key: String): String? = if (isNull(key)) null else optString(key).ifEmpty { null }
 }

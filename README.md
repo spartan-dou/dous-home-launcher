@@ -66,7 +66,14 @@ Les mêmes photos en plein écran, avec l'heure, la météo, le lieu et la date 
 - **Sur la TV** : c'est un économiseur d'écran (« Cadre photo », à choisir dans *Paramètres → Préférences relatives à l'appareil → Économiseur d'écran*). Android le lance et l'arrête ; la première touche revient à ce qui était affiché.
 - **Sur une tablette** : c'est l'appli « Cadre photo ». Elle garde l'écran allumé tant qu'elle est affichée. Un toucher fait apparaître les boutons (précédente, pause, suivante, réglages, fermer), un glissement change de photo. L'accueil reste aussi proposé comme launcher (touche Accueil, ou *Paramètres → Applis par défaut → Appli d'écran d'accueil*) : il liste alors les applis classiques (icône quand elles n'ont pas de bannière TV), et un toucher fait revenir les applis masquées. Seuls le service de la télécommande, « Reprendre la lecture » et les Nouveautés, propres à Android TV, sont absents.
 
-Dans les deux cas, rien ne tourne quand le cadre n'est pas à l'écran.
+**Cadre permanent sur secteur** (tablette, *Réglages → Cadre photo*) : quand l'écran s'éteint pendant la charge (délai d'écran, bouton marche, appli laissée ouverte), il se rallume aussitôt sur le cadre. Débranchée, ou éteinte par Home Assistant (bouton **Éteindre l'écran**), la tablette reste éteinte. Remplace les profils Tasker « Lancer Immich », « Verrouiller Tablette » et « Ha Lock ». Il faut une fois :
+
+- autoriser l'affichage par-dessus les autres applis (bouton dans les réglages, ou `adb shell appops set io.github.spartandou.launcher SYSTEM_ALERT_WINDOW allow`) ; sur Xiaomi, aussi « Afficher les fenêtres pop-up en arrière-plan » et « Démarrage automatique » dans les autorisations de l'appli ;
+- pour le bouton Éteindre l'écran, faire de l'appli un administrateur de l'appareil (bouton dans les réglages, ou `adb shell dpm set-active-admin io.github.spartandou.launcher/.FrameKeeper\$Admin`).
+
+Seul ce petit service tourne alors en arrière-plan (une notification discrète l'indique) ; il ne fait rien tant que l'écran est allumé.
+
+Sinon, rien ne tourne quand le cadre n'est pas à l'écran.
 
 Réglages → Photos propose aussi **uniquement les souvenirs du jour** : quand il y en a, eux seuls défilent ; sinon les albums comme d'habitude.
 
@@ -137,7 +144,7 @@ L'API, pour qui veut s'en servir autrement (en-tête `Authorization: Bearer <cl�
 |---|---|
 | `GET /api/state` | Ce que le cadre affiche et ses réglages |
 | `PUT /api/settings` | `memories`, `memories_only`, `paused` (au choix) |
-| `POST /api/command` | `{"command": "next" \| "previous" \| "close"}` |
+| `POST /api/command` | `{"command": "next" \| "previous" \| "close" \| "screen_off"}` (`screen_off` : l'appli doit être administrateur de l'appareil) |
 | `POST /api/notifications` | `message`, `link`, `duration` (minutes), `tag` ; message vide : efface |
 | `PUT /api/sensors` | `{"sensors": [{"icon", "value", "unit"}]}` |
 
