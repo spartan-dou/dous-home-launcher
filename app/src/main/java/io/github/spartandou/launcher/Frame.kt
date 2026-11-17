@@ -97,7 +97,8 @@ class Frame(
         tick.run()
         FrameHub.active = this
         FrameHub.hold(context, this)
-        applyBrightness()
+        // Straight at the level it was left at: no fade from the device's when the frame comes up
+        applyBrightness(fade = false)
     }
 
     fun stop() {
@@ -138,7 +139,7 @@ class Frame(
         if (changes.has("paused")) setPaused(changes.optBoolean("paused"))
         if (changes.has("brightness")) {
             prefs.frameBrightness = changes.optInt("brightness", -1).coerceIn(-1, 100)
-            applyBrightness()
+            applyBrightness(fade = true)
         }
         // Other photos to show: at once, not after the one on screen has had its time
         if (sourceKey != prefs.sourceKey) {
@@ -298,7 +299,7 @@ class Frame(
      * Fades the frame's window to the brightness Home Assistant set (never fully dark: 0 % keeps a
      * faint light), or hands it back to the device's. Leaving the frame gives the device its own.
      */
-    private fun applyBrightness() {
+    private fun applyBrightness(fade: Boolean) {
         val window = window ?: return
         brightnessFade?.cancel()
         val level = prefs.frameBrightness
@@ -307,6 +308,10 @@ class Frame(
             return
         }
         val target = MIN_BRIGHTNESS + (1f - MIN_BRIGHTNESS) * level / 100f
+        if (!fade) {
+            window.attributes = window.attributes.apply { screenBrightness = target }
+            return
+        }
         val from = window.attributes.screenBrightness.takeIf { it >= 0f } ?: deviceBrightness()
         brightnessFade = ValueAnimator.ofFloat(from, target).apply {
             duration = BRIGHTNESS_FADE_MS
@@ -413,7 +418,7 @@ class Frame(
         private const val TICK_MS = 30_000L
         private const val PAUSE_MARK_MS = 900L
         private const val BUSY_MS = 2_000L
-        private const val BRIGHTNESS_FADE_MS = 2_000L
+        private const val BRIGHTNESS_FADE_MS = 1_000L
         // 0 % from Home Assistant: dim, but the photo still there
         private const val MIN_BRIGHTNESS = 0.06f
         private const val HOME_ASSISTANT = "io.homeassistant.companion.android"

@@ -96,7 +96,7 @@ Tant qu'il est affiché, le cadre répond sur le réseau local (port 47915) à l
 - des boutons **Photo suivante**, **Photo précédente** et **Fermer** ;
 - des **notifications** par-dessus la photo (les trois plus récentes, avec durée, étiquette et lien ouvert au toucher) ;
 - des **valeurs sous l'heure** (température d'une pièce, d'un capteur…), choisies dans les options de l'intégration, chacune avec un emoji et un lien vers la vue de sa pièce, ouverte quand on la touche ;
-- une **luminosité du cadre** (curseur 0-100 %) : seulement la fenêtre du cadre, comme ImmichFrame, en fondu de 2 s, et 0 % reste faiblement éclairé.
+- une **luminosité du cadre** (curseur 0-100 %) : seulement la fenêtre du cadre, comme ImmichFrame, en fondu d'une seconde (appliquée d'emblée à l'ouverture du cadre), et 0 % reste faiblement éclairé.
 
 Sur la tablette, toucher l'heure ouvre l'accueil du launcher, la date ou la météo ramènent Home Assistant tel qu'il était. Toucher à gauche : photo précédente, à droite : suivante, au centre : pause ; appui long : réglages.
 
