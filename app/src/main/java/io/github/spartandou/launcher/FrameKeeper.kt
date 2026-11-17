@@ -12,6 +12,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.LinkProperties
+import android.net.Network
 import android.os.BatteryManager
 import android.os.Handler
 import android.os.IBinder
@@ -44,6 +47,15 @@ class FrameKeeper : Service() {
         super.onCreate()
         startForeground(NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
+        // Home Assistant reaches the tablet the whole time, not only while the frame is shown
+        FrameHub.hold(this, this)
+        getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(network)
+    }
+
+    // Wi-Fi back, or a new address: the API listens again on it
+    private val network = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(net: Network) { main.post { FrameHub.restart() } }
+        override fun onLinkPropertiesChanged(net: Network, properties: LinkProperties) { main.post { FrameHub.restart() } }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -57,6 +69,8 @@ class FrameKeeper : Service() {
     override fun onDestroy() {
         main.removeCallbacksAndMessages(null)
         unregisterReceiver(screenOff)
+        try { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(network) } catch (e: Exception) { }
+        FrameHub.release(this)
         super.onDestroy()
     }
 

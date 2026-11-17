@@ -44,7 +44,6 @@ class Frame(
     private val worker = Executors.newSingleThreadExecutor()
     private val wall: PhotoWall
     private val weather = WeatherLine(root.findViewById(R.id.weather), prefs, worker)
-    private val server = FrameServer(prefs.frameKey, this)
     private val clockBox: View = root.findViewById(R.id.clock_box)
     private val captionCard: View = root.findViewById(R.id.caption_box)
     private val sensors: LinearLayout = root.findViewById(R.id.sensors)
@@ -96,12 +95,14 @@ class Frame(
         if (changed) wall.skip()
         main.removeCallbacks(tick)
         tick.run()
-        server.start()
+        FrameHub.active = this
+        FrameHub.hold(context, this)
         applyBrightness()
     }
 
     fun stop() {
-        server.stop()
+        if (FrameHub.active === this) FrameHub.active = null
+        FrameHub.release(this)
         main.removeCallbacks(tick)
         main.removeCallbacks(endOfNote)
         brightnessFade?.cancel()

@@ -100,7 +100,7 @@ Tant qu'il est affiché, le cadre répond sur le réseau local (port 47915) à l
 
 Sur la tablette, toucher l'heure ouvre l'accueil du launcher, la date ou la météo ramènent Home Assistant tel qu'il était. Toucher à gauche : photo précédente, à droite : suivante, au centre : pause ; appui long : réglages.
 
-Cadre fermé, ces entités sont « indisponibles » : c'est voulu, l'appli n'écoute rien en arrière-plan. Les valeurs sous l'heure reviennent dès qu'il est rouvert.
+Sur la tablette avec le **cadre permanent sur secteur**, l'appli répond tout le temps : cadre fermé, les réglages, notifications et valeurs sont gardés pour son retour, et l'écran peut toujours être éteint. Sur la TV (et sans cadre permanent), les entités sont « indisponibles » quand le cadre n'est pas affiché : rien n'écoute alors en arrière-plan.
 
 Sur une tablette, l'appli compagnon Home Assistant fait le reste (allumer l'écran, ouvrir le cadre, régler la luminosité), ce qui remplace Tasker. Exemple, à adapter (`mobile_app_tablette`, `binary_sensor.tablette_interactive`, `input_boolean.nuit`) :
 

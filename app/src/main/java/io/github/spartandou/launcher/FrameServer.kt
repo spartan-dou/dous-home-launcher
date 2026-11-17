@@ -15,15 +15,15 @@ import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 /**
- * The photo frame's API for Home Assistant, on the local network. Only listens while the frame is
- * on screen: nothing runs in the background, so Home Assistant sees the frame as unavailable the
- * rest of the time. Every request carries the key shown in the settings.
+ * The photo frame's API for Home Assistant, on the local network, held by [FrameHub]: while the
+ * frame is on screen, and on a tablet whose frame keeper runs the whole time. Every request carries
+ * the key shown in the settings.
  *
  * GET  /api/state           what the frame shows
  * PUT  /api/settings        {"memories", "memories_only", "paused", "brightness" (0-100, -1: the device's)}, any of them
- * POST /api/command         {"command": "next" | "previous" | "close"}
+ * POST /api/command         {"command": "next" | "previous" | "close" | "screen_off"}
  * POST /api/notifications   {"message", "link", "duration", "tag"}
- * PUT  /api/sensors         {"sensors": [{"icon", "value", "unit"}]}
+ * PUT  /api/sensors         {"sensors": [{"icon", "value", "unit", "link"}]}
  */
 class FrameServer(private val key: String, private val host: Host) {
 
