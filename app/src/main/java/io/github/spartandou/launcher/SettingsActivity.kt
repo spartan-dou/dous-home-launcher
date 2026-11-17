@@ -95,7 +95,15 @@ class SettingsActivity : Activity() {
                 menu.addView(item)
             }
         }
-        root.addView(menu, LinearLayout.LayoutParams(dp(300), -1))
+        // Scrolls: on a 1080p TV the last sections (photo frame, updates, Immich) were below the
+        // screen's edge, out of reach even with the remote
+        val menuScroll = ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            isFillViewport = true
+            setBackgroundColor(0xFF15181E.toInt())
+            addView(menu)
+        }
+        root.addView(menuScroll, LinearLayout.LayoutParams(dp(300), -1))
 
         // Up or down past the first or last line stays put instead of jumping into the menu
         // (which would switch sections); only left goes back to the menu
