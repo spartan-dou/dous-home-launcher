@@ -557,12 +557,12 @@ class SettingsActivity : Activity() {
             })
             add(hint(getString(R.string.home_hint)))
         }
-        add(hint(getString(R.string.frame_how)))
+        if (isTv()) add(hint(getString(R.string.frame_how)))
         add(subheader(getString(R.string.frame_ha)))
         val address = Http.localIpv4Address()?.let { "http://$it:${FrameServer.PORT}" } ?: getString(R.string.frame_no_network)
         add(text("${getString(R.string.frame_ha_address)} : $address", 17f).apply { setPadding(0, dp(12), 0, 0) })
         add(text("${getString(R.string.frame_ha_key)} : ${prefs.frameKey}", 17f).apply { setPadding(0, dp(8), 0, 0) })
-        add(hint(getString(R.string.frame_ha_hint)))
+        add(hint(getString(if (isTv()) R.string.frame_ha_hint else R.string.frame_ha_hint_tablet)))
     }
 
     private fun connection() {

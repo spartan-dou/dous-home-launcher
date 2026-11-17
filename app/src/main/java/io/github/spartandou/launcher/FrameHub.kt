@@ -50,6 +50,7 @@ object FrameHub : FrameServer.Host {
             .put("memories", prefs.memories)
             .put("memories_only", prefs.memoriesOnly)
             .put("paused", false)
+            .put("tv", app.isTv())
             .put("brightness", prefs.frameBrightness.takeIf { it >= 0 } ?: JSONObject.NULL)
             .put("place", JSONObject.NULL)
             .put("date", JSONObject.NULL)

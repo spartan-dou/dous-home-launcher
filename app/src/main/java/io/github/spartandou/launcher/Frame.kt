@@ -129,6 +129,8 @@ class Frame(
         .put("memories", prefs.memories)
         .put("memories_only", prefs.memoriesOnly)
         .put("paused", wall.paused)
+        // A TV: Home Assistant leaves out what only a touch screen uses (brightness, links, screen off)
+        .put("tv", context.isTv())
         .put("brightness", prefs.frameBrightness.takeIf { it >= 0 } ?: JSONObject.NULL)
         .put("place", wall.current?.place ?: JSONObject.NULL)
         .put("date", wall.current?.date ?: JSONObject.NULL)

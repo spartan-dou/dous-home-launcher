@@ -193,13 +193,14 @@
     <string name="home_is_default">C\'est l\'écran d\'accueil par défaut de la tablette.</string>
     <string name="home_not_default">Ce n\'est pas encore l\'écran d\'accueil par défaut.</string>
     <string name="home_hint">Choisissez « Dou\'s Home Launcher » dans la fenêtre d\'Android : la touche Accueil y mènera ensuite. Si Android propose « Une seule fois » ou « Toujours », prenez « Toujours ».</string>
-    <string name="frame_how">Sur une tablette : l\'appli « Cadre photo ». Sur la TV : l\'économiseur d\'écran « Cadre photo », à choisir dans les paramètres Android.</string>
+    <string name="frame_how">L\'économiseur d\'écran « Cadre photo », à choisir dans les paramètres Android.</string>
     <string name="memories_only">Uniquement les souvenirs du jour, quand il y en a</string>
     <string name="frame_ha">Home Assistant</string>
     <string name="frame_ha_address">Adresse</string>
     <string name="frame_ha_key">Clé</string>
     <string name="frame_no_network">pas de réseau local</string>
-    <string name="frame_ha_hint">À saisir dans l\'intégration « Dou\'s Home Launcher » de Home Assistant : notifications, valeurs sous l\'heure, souvenirs, pause. Le cadre ne répond que lorsqu\'il est affiché.</string>
+    <string name="frame_ha_hint">À saisir dans l\'intégration « Dou\'s Home Launcher » de Home Assistant : notifications, valeurs sous l\'heure, souvenirs, pause. Le cadre ne répond que pendant l\'économiseur d\'écran.</string>
+    <string name="frame_ha_hint_tablet">À saisir dans l\'intégration « Dou\'s Home Launcher » de Home Assistant : notifications, valeurs sous l\'heure, luminosité, souvenirs, pause, extinction de l\'écran. Avec le cadre permanent, la tablette répond tout le temps.</string>
 
     <!-- Updates -->
     <string name="update_current">Version installée : %1$s</string>
