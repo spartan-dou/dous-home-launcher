@@ -506,10 +506,17 @@ class SettingsActivity : Activity() {
                 restoreHomeScreen()
                 startActivity(Intent(this, HomeActivity::class.java))
             })
+            val roles = getSystemService(android.app.role.RoleManager::class.java)
+            val home = android.app.role.RoleManager.ROLE_HOME
+            val isDefault = roles?.isRoleHeld(home) == true
+            add(text(getString(if (isDefault) R.string.home_is_default else R.string.home_not_default), 17f))
             add(action(getString(R.string.home_default)) {
                 restoreHomeScreen()
                 try {
-                    startActivity(Intent(android.provider.Settings.ACTION_HOME_SETTINGS))
+                    // The system's own "default home app" request: a lasting choice, not a "just once"
+                    if (roles != null && roles.isRoleAvailable(home) && !roles.isRoleHeld(home))
+                        startActivityForResult(roles.createRequestRoleIntent(home), REQUEST_HOME)
+                    else startActivity(Intent(android.provider.Settings.ACTION_HOME_SETTINGS))
                 } catch (e: Exception) {
                     startActivity(Intent(android.provider.Settings.ACTION_SETTINGS))
                 }
@@ -692,6 +699,7 @@ class SettingsActivity : Activity() {
     private fun dp(value: Int) = Tiles.dp(this, value)
 
     companion object {
+        private const val REQUEST_HOME = 2
         private val NAVIGATION_KEYS = setOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_HOME,

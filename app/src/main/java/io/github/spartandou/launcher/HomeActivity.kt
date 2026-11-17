@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Color
+import android.graphics.Insets
 import android.net.http.HttpResponseCache
 import android.os.Bundle
 import android.os.Handler
@@ -18,6 +19,7 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.view.WindowInsets
 import android.widget.FrameLayout
 import android.widget.GridLayout
 import android.widget.HorizontalScrollView
@@ -57,6 +59,8 @@ class HomeActivity : Activity() {
     private var appsDirty = true
     private var gridDirty = true
     private var uiHidden = false
+    // Room taken by the system's bars (a tablet's navigation bar; none on the TV)
+    private var bars: Insets = Insets.NONE
     // The rest of the touch that woke the apps up, so it never taps one
     private var swallowTouch = false
     private var layoutKey = ""
@@ -122,6 +126,16 @@ class HomeActivity : Activity() {
         dock.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom -> if (top != oldTop || bottom != oldBottom) fitNews() }
         // It sits under the clock, whose height changes with its size and the weather line
         clockBox.addOnLayoutChangeListener { _, _, _, _, bottom, _, _, _, oldBottom -> if (bottom != oldBottom) fitNews() }
+
+        // The photo goes under the system's bars, the apps, clock and status stay clear of them
+        findViewById<View>(android.R.id.content).setOnApplyWindowInsetsListener { _, insets ->
+            val room = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+            if (room != bars) {
+                bars = room
+                applyLayout()
+            }
+            insets
+        }
 
         val slides = findViewById<FrameLayout>(R.id.slides)
         findViewById<GlassView>(R.id.all_apps_glass).apply { cornerRadius = 0f; tint = 0x99000000.toInt() }
@@ -315,9 +329,12 @@ class HomeActivity : Activity() {
         val m = Tiles.dp(this, 28)
         (dock.layoutParams as FrameLayout.LayoutParams).apply {
             gravity = if (top) Gravity.TOP else Gravity.BOTTOM
-            topMargin = if (top) m else 0
-            bottomMargin = if (top) 0 else m
+            topMargin = if (top) m + bars.top else 0
+            bottomMargin = if (top) 0 else m + bars.bottom
+            leftMargin = bars.left
+            rightMargin = bars.right
         }
+        (grid.parent as View).setPadding(bars.left, 0, bars.right, bars.bottom)
 
         val vertical = if (top) Gravity.BOTTOM else Gravity.TOP
         val clock = prefs.clockPosition
@@ -332,15 +349,15 @@ class HomeActivity : Activity() {
         (clockBox.getChildAt(0) as TextView).setTextSize(TypedValue.COMPLEX_UNIT_SP, Prefs.CLOCK_SIZES[prefs.clockSize].toFloat())
         (clockBox.layoutParams as FrameLayout.LayoutParams).apply {
             gravity = vertical or horizontal
-            topMargin = if (top) 0 else Tiles.dp(this@HomeActivity, 32)
-            bottomMargin = if (top) Tiles.dp(this@HomeActivity, 40) else 0
+            topMargin = if (top) 0 else Tiles.dp(this@HomeActivity, 32) + bars.top
+            bottomMargin = if (top) Tiles.dp(this@HomeActivity, 40) + bars.bottom else 0
         }
         val infoSide = if (clock == Prefs.CLOCK_RIGHT) Gravity.START else Gravity.END
         infoBox.gravity = infoSide
         (infoBox.layoutParams as FrameLayout.LayoutParams).apply {
             gravity = vertical or infoSide
-            topMargin = if (top) 0 else Tiles.dp(this@HomeActivity, 24)
-            bottomMargin = if (top) Tiles.dp(this@HomeActivity, 24) else 0
+            topMargin = if (top) 0 else Tiles.dp(this@HomeActivity, 24) + bars.top
+            bottomMargin = if (top) Tiles.dp(this@HomeActivity, 24) + bars.bottom else 0
         }
         statusBox.visibility = if (prefs.showStatus) View.VISIBLE else View.GONE
         weather.update()

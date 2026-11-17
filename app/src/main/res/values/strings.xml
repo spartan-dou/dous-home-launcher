@@ -182,7 +182,9 @@
     <string name="frame_open">Afficher le cadre maintenant</string>
     <string name="home_open">Ouvrir l\'écran d\'accueil</string>
     <string name="home_default">Choisir l\'écran d\'accueil par défaut…</string>
-    <string name="home_hint">Dans les paramètres Android qui s\'ouvrent, choisissez « Dou\'s Home Launcher » : la touche Accueil de la tablette y mènera.</string>
+    <string name="home_is_default">C\'est l\'écran d\'accueil par défaut de la tablette.</string>
+    <string name="home_not_default">Ce n\'est pas encore l\'écran d\'accueil par défaut.</string>
+    <string name="home_hint">Choisissez « Dou\'s Home Launcher » dans la fenêtre d\'Android : la touche Accueil y mènera ensuite. Si Android propose « Une seule fois » ou « Toujours », prenez « Toujours ».</string>
     <string name="frame_how">Sur une tablette : l\'appli « Cadre photo ». Sur la TV : l\'économiseur d\'écran « Cadre photo », à choisir dans les paramètres Android.</string>
     <string name="memories_only">Uniquement les souvenirs du jour, quand il y en a</string>
     <string name="frame_ha">Home Assistant</string>
