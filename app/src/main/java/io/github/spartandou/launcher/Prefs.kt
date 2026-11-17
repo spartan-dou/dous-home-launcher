@@ -9,6 +9,7 @@ import java.security.SecureRandom
 import java.util.UUID
 
 class Prefs(context: Context) {
+    private val tv = context.isTv()
     private val prefs: SharedPreferences = context.getSharedPreferences("launcher", Context.MODE_PRIVATE)
 
     /** Immich server, e.g. https://immich.example.com */
@@ -280,6 +281,14 @@ class Prefs(context: Context) {
         set(value) = prefs.edit().putBoolean("carousel", value).apply()
 
     /** A very slow zoom on each photo (GPU only: the photo is not decoded again). */
+    /**
+     * Fades only: no zoom nor movement of the photos (home screen and frame), "all apps" fading
+     * in and out. A tablet's default; the TV keeps its movements.
+     */
+    var fadeOnly: Boolean
+        get() = prefs.getBoolean("fade_only", !tv)
+        set(value) = prefs.edit().putBoolean("fade_only", value).apply()
+
     var drift: Boolean
         get() = prefs.getBoolean("drift", true)
         set(value) = prefs.edit().putBoolean("drift", value).apply()

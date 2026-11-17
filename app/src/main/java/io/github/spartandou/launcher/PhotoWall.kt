@@ -355,7 +355,10 @@ class PhotoWall(
         slide.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         slide.animate().alpha(1f).setDuration(if (frame) FRAME_FADE_MS else FADE_MS)
             .setInterpolator(if (frame) AccelerateDecelerateInterpolator() else null).withEndAction {
-            slide.setLayerType(View.LAYER_TYPE_NONE, null)
+            // The frame's zoom keeps the slide as one GPU texture, scaled as a whole: smooth on the
+            // Shield, where redrawing the photo and its blur each frame stuttered (~8 MB of GPU
+            // memory while shown, freed with the slide)
+            if (!(frame && drifts.containsKey(slide))) slide.setLayerType(View.LAYER_TYPE_NONE, null)
             // The previous photo is freed as soon as it is fully covered. Explicitly: the Java heap
             // stays tiny, so a GC (which would free it) can take many photos to come
             val old = slides[front]
@@ -421,7 +424,7 @@ class PhotoWall(
         drifts.remove(slide)?.cancel()
         slide.scaleX = 1f
         slide.scaleY = 1f
-        if (!prefs.drift && !frame) return
+        if (prefs.fadeOnly || (!prefs.drift && !frame)) return
         // The frame zooms around a point near the middle (a corner could push the subject out);
         // a photo shown whole on its blur, around its very centre, so it stays centred
         val whole = (slide.getChildAt(1) as ImageView).scaleType == ImageView.ScaleType.FIT_CENTER
@@ -455,6 +458,7 @@ class PhotoWall(
 
     private fun stopDrift(slide: FrameLayout) {
         drifts.remove(slide)?.cancel()
+        slide.setLayerType(View.LAYER_TYPE_NONE, null)
         slide.scaleX = 1f
         slide.scaleY = 1f
     }

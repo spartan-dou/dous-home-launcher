@@ -984,6 +984,11 @@ class HomeActivity : Activity() {
     private fun openAllApps() {
         main.removeCallbacks(hideUi)
         if (gridDirty || grid.childCount == 0) buildGrid()
+        allApps.animate().cancel()
+        if (prefs.fadeOnly) {
+            allApps.alpha = 0f
+            allApps.animate().alpha(1f).setDuration(FADE_MS).start()
+        } else allApps.alpha = 1f
         allApps.visibility = View.VISIBLE
         dock.visibility = View.INVISIBLE
         grid.getChildAt(0)?.requestFocus()
@@ -991,10 +996,14 @@ class HomeActivity : Activity() {
 
     private fun closeAllApps() {
         if (allApps.visibility != View.VISIBLE) return
-        allApps.visibility = View.GONE
-        // Frees the pictures of every app
-        grid.removeAllViews()
-        gridDirty = true
+        val hide = Runnable {
+            allApps.visibility = View.GONE
+            // Frees the pictures of every app
+            grid.removeAllViews()
+            gridDirty = true
+        }
+        allApps.animate().cancel()
+        if (prefs.fadeOnly) allApps.animate().alpha(0f).setDuration(FADE_MS).withEndAction(hide).start() else hide.run()
         dock.visibility = View.VISIBLE
         rowsBox.findViewWithTag<View>(ALL_APPS)?.requestFocus()
         scheduleHide()
@@ -1100,6 +1109,7 @@ class HomeActivity : Activity() {
         private const val TICK_MS = 5_000L
         private const val HTTP_CACHE_BYTES = 16L * 1024 * 1024
         private const val ALL_APPS = "all_apps"
+        private const val FADE_MS = 220L
         private const val SETTINGS = "settings"
         private const val NO_FOCUS = ""
         private const val MEDIA_DELAY_MS = 500L

@@ -270,6 +270,7 @@ class SettingsActivity : Activity() {
     private fun display() {
         add(check(getString(R.string.auto_hide), prefs.autoHide) { prefs.autoHide = it })
         add(check(getString(R.string.show_status), prefs.showStatus) { prefs.showStatus = it })
+        add(check(getString(R.string.fade_only), prefs.fadeOnly) { prefs.fadeOnly = it })
         add(check(getString(R.string.drift), prefs.drift) { prefs.drift = it })
         add(pick(getString(R.string.clock_label), array(R.array.clock_positions), { prefs.clockPosition }) { prefs.clockPosition = it })
         add(pick(getString(R.string.clock_size_label), array(R.array.clock_sizes), { prefs.clockSize }) { prefs.clockSize = it })

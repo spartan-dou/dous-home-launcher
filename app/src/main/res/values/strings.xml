@@ -54,6 +54,7 @@
     <!-- Display -->
     <string name="auto_hide">Masquer les applis après 30 s sans toucher la télécommande</string>
     <string name="show_status">Alertes en haut : réseau coupé ou faible, mémoire presque pleine</string>
+    <string name="fade_only">Animations en fondu uniquement (ni zoom ni mouvement)</string>
     <string name="drift">Fond animé : zoom très lent sur la photo</string>
     <string name="clock_label">Horloge</string>
     <string-array name="clock_positions">
