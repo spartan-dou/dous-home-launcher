@@ -95,7 +95,10 @@ Tant qu'il est affiché, le cadre répond sur le réseau local (port 47915) à l
 - des interrupteurs **Souvenirs**, **Souvenirs uniquement** et **Pause** ;
 - des boutons **Photo suivante**, **Photo précédente** et **Fermer** ;
 - des **notifications** par-dessus la photo (les trois plus récentes, avec durée, étiquette et lien ouvert au toucher) ;
-- des **valeurs sous l'heure** (température d'une pièce, d'un capteur…), choisies dans les options de l'intégration.
+- des **valeurs sous l'heure** (température d'une pièce, d'un capteur…), choisies dans les options de l'intégration, chacune avec un emoji et un lien vers la vue de sa pièce, ouverte quand on la touche ;
+- une **luminosité du cadre** (curseur 0-100 %) : seulement la fenêtre du cadre, comme ImmichFrame, en fondu de 2 s, et 0 % reste faiblement éclairé.
+
+Sur la tablette, toucher l'heure ouvre l'accueil du launcher, la date ou la météo ramènent Home Assistant tel qu'il était. Toucher à gauche : photo précédente, à droite : suivante, au centre : pause ; appui long : réglages.
 
 Cadre fermé, ces entités sont « indisponibles » : c'est voulu, l'appli n'écoute rien en arrière-plan. Les valeurs sous l'heure reviennent dès qu'il est rouvert.
 
@@ -154,7 +157,7 @@ L'API, pour qui veut s'en servir autrement (en-tête `Authorization: Bearer <cl�
 | Requête | Effet |
 |---|---|
 | `GET /api/state` | Ce que le cadre affiche et ses réglages |
-| `PUT /api/settings` | `memories`, `memories_only`, `paused` (au choix) |
+| `PUT /api/settings` | `memories`, `memories_only`, `paused`, `brightness` (0-100, -1 : celle de l'appareil) (au choix) |
 | `POST /api/command` | `{"command": "next" \| "previous" \| "close" \| "screen_off"}` (`screen_off` : l'appli doit être administrateur de l'appareil) |
 | `POST /api/notifications` | `message`, `link`, `duration` (minutes), `tag` ; message vide : efface |
 | `PUT /api/sensors` | `{"sensors": [{"icon", "value", "unit"}]}` |

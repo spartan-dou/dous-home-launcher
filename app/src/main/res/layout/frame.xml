@@ -35,7 +35,9 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
+        <!-- Tapped: the launcher's home screen -->
         <TextClock
+            android:id="@+id/frame_time"
             style="@style/ShadowText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

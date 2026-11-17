@@ -20,7 +20,7 @@ import kotlin.concurrent.thread
  * rest of the time. Every request carries the key shown in the settings.
  *
  * GET  /api/state           what the frame shows
- * PUT  /api/settings        {"memories", "memories_only", "paused"}, any of them
+ * PUT  /api/settings        {"memories", "memories_only", "paused", "brightness" (0-100, -1: the device's)}, any of them
  * POST /api/command         {"command": "next" | "previous" | "close"}
  * POST /api/notifications   {"message", "link", "duration", "tag"}
  * PUT  /api/sensors         {"sensors": [{"icon", "value", "unit"}]}

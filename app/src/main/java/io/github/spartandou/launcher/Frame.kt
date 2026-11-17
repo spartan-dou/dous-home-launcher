@@ -1,16 +1,21 @@
 package io.github.spartandou.launcher
 
+import android.animation.ValueAnimator
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
+import android.service.dreams.DreamService
 import android.util.Log
 import android.util.TypedValue
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
+import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -75,8 +80,12 @@ class Frame(
                 fit()
             }
         }
-        // Tapping the clock opens Home Assistant, as on ImmichFrame
-        if (touch) clockBox.setOnClickListener { openHomeAssistant() }
+        // The time opens the launcher's home screen; the rest of the clock (date, weather) Home
+        // Assistant as it was left, as on ImmichFrame; each value its own view (below)
+        if (touch) {
+            root.findViewById<View>(R.id.frame_time).setOnClickListener { openHome() }
+            clockBox.setOnClickListener { openHomeAssistant() }
+        }
     }
 
     fun start() {
@@ -88,12 +97,14 @@ class Frame(
         main.removeCallbacks(tick)
         tick.run()
         server.start()
+        applyBrightness()
     }
 
     fun stop() {
         server.stop()
         main.removeCallbacks(tick)
         main.removeCallbacks(endOfNote)
+        brightnessFade?.cancel()
         wall.stop()
     }
 
@@ -116,6 +127,7 @@ class Frame(
         .put("memories", prefs.memories)
         .put("memories_only", prefs.memoriesOnly)
         .put("paused", wall.paused)
+        .put("brightness", prefs.frameBrightness.takeIf { it >= 0 } ?: JSONObject.NULL)
         .put("place", wall.current?.place ?: JSONObject.NULL)
         .put("date", wall.current?.date ?: JSONObject.NULL)
 
@@ -123,6 +135,10 @@ class Frame(
         if (changes.has("memories")) prefs.memories = changes.optBoolean("memories")
         if (changes.has("memories_only")) prefs.memoriesOnly = changes.optBoolean("memories_only")
         if (changes.has("paused")) setPaused(changes.optBoolean("paused"))
+        if (changes.has("brightness")) {
+            prefs.frameBrightness = changes.optInt("brightness", -1).coerceIn(-1, 100)
+            applyBrightness()
+        }
         // Other photos to show: at once, not after the one on screen has had its time
         if (sourceKey != prefs.sourceKey) {
             sourceKey = prefs.sourceKey
@@ -231,6 +247,8 @@ class Frame(
             this.alpha = alpha
             maxLines = 1
         }
+        // Tapped: its room's view in Home Assistant, or Home Assistant as it was left
+        if (touch) setOnClickListener { if (target(value.link) != null) open(value.link!!) else openHomeAssistant() }
         if (value.icon.isNotEmpty()) addView(part(value.icon, 15f, 1f, "sans-serif"), LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(6) })
         addView(LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -260,6 +278,47 @@ class Frame(
         // Without a link, taps go through to the previous / pause / next zones underneath
         if (touch && link != null) card.setOnClickListener { open(link) }
         return card
+    }
+
+    private fun openHome() {
+        try {
+            context.startActivity(Intent(context, HomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (e: Exception) {
+            Log.w(TAG, "Cannot open the home screen", e)
+        }
+    }
+
+    // --- Brightness: only the frame's window, as ImmichFrame's ---
+
+    private val window get() = (context as? Activity)?.window ?: (context as? DreamService)?.window
+    private var brightnessFade: ValueAnimator? = null
+
+    /**
+     * Fades the frame's window to the brightness Home Assistant set (never fully dark: 0 % keeps a
+     * faint light), or hands it back to the device's. Leaving the frame gives the device its own.
+     */
+    private fun applyBrightness() {
+        val window = window ?: return
+        brightnessFade?.cancel()
+        val level = prefs.frameBrightness
+        if (level < 0) {
+            window.attributes = window.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
+            return
+        }
+        val target = MIN_BRIGHTNESS + (1f - MIN_BRIGHTNESS) * level / 100f
+        val from = window.attributes.screenBrightness.takeIf { it >= 0f } ?: deviceBrightness()
+        brightnessFade = ValueAnimator.ofFloat(from, target).apply {
+            duration = BRIGHTNESS_FADE_MS
+            addUpdateListener { fade -> window.attributes = window.attributes.apply { screenBrightness = fade.animatedValue as Float } }
+            start()
+        }
+    }
+
+    // Where a fade starts when the device's brightness was in use (its 0-255 setting)
+    private fun deviceBrightness(): Float = try {
+        (Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS) / 255f).coerceIn(0f, 1f)
+    } catch (e: Exception) {
+        0.5f
     }
 
     // As the ImmichFrame fork's overlay: an empty invitation, so Home Assistant's app finds no
@@ -353,6 +412,9 @@ class Frame(
         private const val TICK_MS = 30_000L
         private const val PAUSE_MARK_MS = 900L
         private const val BUSY_MS = 2_000L
+        private const val BRIGHTNESS_FADE_MS = 2_000L
+        // 0 % from Home Assistant: dim, but the photo still there
+        private const val MIN_BRIGHTNESS = 0.06f
         private const val HOME_ASSISTANT = "io.homeassistant.companion.android"
         // ImmichFrame's cards: 18 % of a dark tint over the blurred photo
         private const val GLASS_TINT = 0x2E000000

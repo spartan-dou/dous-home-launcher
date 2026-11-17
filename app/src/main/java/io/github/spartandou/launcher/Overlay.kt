@@ -11,7 +11,7 @@ import org.json.JSONObject
 object Overlay {
     class Note(val message: String, val link: String?, val tag: String?, val until: Long)
 
-    class Value(val icon: String, val value: String, val unit: String)
+    class Value(val icon: String, val value: String, val unit: String, val link: String?)
 
     private const val MAX_NOTES = 3
     // Home Assistant sends the values again every minute: older ones are no longer true
@@ -50,7 +50,7 @@ object Overlay {
     fun setValues(sensors: JSONArray, now: Long) {
         values = (0 until sensors.length()).mapNotNull { sensors.optJSONObject(it) }.mapNotNull { sensor ->
             val value = sensor.text("value") ?: return@mapNotNull null
-            Value(emoji(sensor.text("icon").orEmpty()), value, sensor.text("unit").orEmpty())
+            Value(emoji(sensor.text("icon").orEmpty()), value, sensor.text("unit").orEmpty(), sensor.text("link"))
         }
         valuesTime = now
     }

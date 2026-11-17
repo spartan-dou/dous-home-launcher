@@ -67,6 +67,11 @@ class Prefs(context: Context) {
         set(value) = prefs.edit().putBoolean("memories", value).apply()
 
     /** Only today's memories, when there are some; wins over [memories]. */
+    /** The photo frame's own brightness, 0-100; -1 follows the device's. */
+    var frameBrightness: Int
+        get() = prefs.getInt("frame_brightness", -1)
+        set(value) = prefs.edit().putInt("frame_brightness", value).apply()
+
     var memoriesOnly: Boolean
         get() = prefs.getBoolean("memories_only", false)
         set(value) = prefs.edit().putBoolean("memories_only", value).apply()
