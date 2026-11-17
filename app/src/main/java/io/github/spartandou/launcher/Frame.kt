@@ -271,7 +271,7 @@ class Frame(
             maxWidth = (root.width * 0.7f).toInt()
             setLineSpacing(0f, 1.3f)
             setPadding(px(2.6f), px(1.2f), px(2.6f), px(1.2f))
-        }, FrameLayout.LayoutParams(-2, -2))
+        }, FrameLayout.LayoutParams(-1, -1)) // match_parent, as the glass: see frame.xml
         card.layoutParams = LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = px(1.2f) }
         if (touch && link != null) card.setOnClickListener { open(link) }
         return card

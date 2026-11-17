@@ -35,7 +35,12 @@ class GlassView @JvmOverloads constructor(context: Context, attrs: AttributeSet?
     private val location = IntArray(2)
 
     var cornerRadius = 24 * resources.displayMetrics.density
-        set(value) { field = value; invalidate() }
+        set(value) {
+            field = value
+            clip.reset()
+            clip.addRoundRect(bounds, value, value, Path.Direction.CW)
+            invalidate()
+        }
 
     var tint: Int
         get() = tintPaint.color
