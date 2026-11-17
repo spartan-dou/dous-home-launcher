@@ -7,6 +7,8 @@ import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Insets
 import android.net.http.HttpResponseCache
@@ -58,6 +60,7 @@ class HomeActivity : Activity() {
     private var apps: List<App> = emptyList()
     private var appsDirty = true
     private var gridDirty = true
+    private var screenOrientation = Configuration.ORIENTATION_UNDEFINED
     private var uiHidden = false
     // Room taken by the system's bars (a tablet's navigation bar; none on the TV)
     private var bars: Insets = Insets.NONE
@@ -98,6 +101,9 @@ class HomeActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_home)
         prefs = Prefs(this)
+        // The TV is always landscape; a tablet turns freely
+        if (isTv()) requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        screenOrientation = resources.configuration.orientation
         // Once a day at most, and only when the system already lets the launcher install
         if (prefs.autoUpdate && Updater.canInstall(this)) Updater.check(this, force = false) {}
         weather = WeatherLine(findViewById(R.id.weather), prefs, network)
@@ -213,6 +219,20 @@ class HomeActivity : Activity() {
     }
 
     // Android wants memory back while another app runs: drop photos and the apps grid, both come back fast
+    // A tablet turned (the TV stays in landscape): the activity stays (configChanges), the photo's
+    // fit and the "all apps" columns follow the new width; the rest lays itself out again
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (newConfig.orientation == screenOrientation) return
+        screenOrientation = newConfig.orientation
+        wall.onRotated()
+        gridDirty = true
+        if (allApps.visibility == View.VISIBLE) {
+            buildGrid()
+            grid.getChildAt(0)?.requestFocus()
+        }
+    }
+
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         if (level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {

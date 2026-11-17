@@ -91,6 +91,8 @@ class Frame(
     /** Android wants memory back. */
     fun release() = wall.release()
 
+    fun onRotated() = wall.onRotated()
+
     /** The frame is gone for good: its photos and threads go with it. */
     fun destroy() {
         wall.close()

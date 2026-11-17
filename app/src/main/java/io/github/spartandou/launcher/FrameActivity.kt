@@ -3,6 +3,7 @@ package io.github.spartandou.launcher
 import android.app.Activity
 import android.content.ComponentCallbacks2
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Bundle
 import android.view.WindowInsets
 import android.view.WindowInsetsController
@@ -50,6 +51,12 @@ class FrameActivity : Activity() {
     override fun onDestroy() {
         frame.destroy()
         super.onDestroy()
+    }
+
+    // Turning the tablet: the activity stays (configChanges), only the photo's fit changes
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        frame.onRotated()
     }
 
     override fun onTrimMemory(level: Int) {

@@ -57,6 +57,8 @@ class PhotoWall(
     // What the front slide and the glass show now, recycled once replaced
     private var shownPhoto: Bitmap? = null
     private var shownBlur: Bitmap? = null
+    // Whether the photo on screen is a portrait one: how it fills the screen depends on the screen's way
+    private var shownPortrait = false
     private var started = false
     private var busy = false
     // A "continue watching" picture is shown instead of the photos
@@ -303,12 +305,8 @@ class PhotoWall(
     private fun display(bitmap: Bitmap, blur: Bitmap?, portrait: Boolean, photo: Photo?) {
         val back = 1 - front
         val slide = slides[back]
-        photoView(back).apply {
-            setImageBitmap(bitmap)
-            scaleType = if (portrait) ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_CROP
-        }
-        // Portrait photos sit on a blurred, darkened copy of themselves; the glass surfaces use it too
-        (slide.getChildAt(0) as ImageView).setImageBitmap(if (portrait) blur else null)
+        photoView(back).setImageBitmap(bitmap)
+        fit(back, portrait, blur)
         GlassView.showAll(blur, FADE_MS)
         blur?.let(onPhoto)
 
@@ -317,6 +315,7 @@ class PhotoWall(
         shownBlur?.takeIf { it !== blur }?.let { retired += it }
         shownPhoto = bitmap
         shownBlur = blur
+        shownPortrait = portrait
         slide.animate().cancel()
         slide.alpha = 0f
         slide.bringToFront()
@@ -394,6 +393,23 @@ class PhotoWall(
     }
 
     private fun photoView(i: Int) = slides[i].getChildAt(1) as ImageView
+
+    /**
+     * A photo the same way as the screen fills it; the other way (a portrait photo on a landscape
+     * screen, or the reverse on a tablet held upright) it is shown whole, on a blurred, darkened
+     * copy of itself. The glass surfaces use that copy too.
+     */
+    private fun fit(i: Int, portrait: Boolean, blur: Bitmap?) {
+        val screenPortrait = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+        val whole = portrait != screenPortrait
+        photoView(i).scaleType = if (whole) ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_CROP
+        (slides[i].getChildAt(0) as ImageView).setImageBitmap(if (whole) blur else null)
+    }
+
+    /** The screen turned (a tablet): the photo on screen fills it again the right way. */
+    fun onRotated() {
+        if (shownPhoto != null) fit(front, shownPortrait, shownBlur)
+    }
 
     // Decodes at most at screen size
     private fun decode(bytes: ByteArray): Bitmap? {
