@@ -479,7 +479,7 @@ class PhotoWall(
         val at = (0 until minOf(PAIR_LOOKAHEAD, list.size - 1)).map { (index + it) % list.size }
             .firstOrNull { list[it].portrait } ?: return null
         val second = try { client.download(client.imageUrl(list[at].id)) } catch (e: Exception) { return null }
-        // Sizes first, pixels one photo at a time: at most the pair and one photo on the heap
+        // Sizes first, without decoding a pixel
         val leftSize = size(first) ?: return null
         val rightSize = size(second) ?: return null
         if (rightSize.second <= rightSize.first) return null
@@ -490,18 +490,27 @@ class PhotoWall(
         val leftWidth = leftSize.first * height / leftSize.second
         val rightWidth = rightSize.first * height / rightSize.second
         val gap = height / PAIR_GAP_DIVISOR
-        val pair = Bitmap.createBitmap(leftWidth + gap + rightWidth, height, Bitmap.Config.ARGB_8888)
-        val canvas = android.graphics.Canvas(pair)
+        // Drawn by the GPU: both halves decoded straight into graphics memory, recorded, and
+        // rendered into one hardware bitmap. No pixel buffer on the heap, which the allocator kept
+        // afterwards (tens of MB on the Shield after a few pairs)
+        val left = decodeHardware(first, height) ?: return null
+        val right = decodeHardware(second, height) ?: run { left.recycle(); return null }
+        val picture = android.graphics.Picture()
         val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
-        for ((bytes, left) in listOf(first to 0, second to leftWidth + gap)) {
-            val photo = decodeSoftware(bytes, height) ?: run { pair.recycle(); return null }
-            canvas.drawBitmap(photo, null, android.graphics.Rect(left, 0, left + photo.width * height / photo.height, height), paint)
-            photo.recycle()
+        picture.beginRecording(leftWidth + gap + rightWidth, height).apply {
+            drawBitmap(left, null, android.graphics.Rect(0, 0, leftWidth, height), paint)
+            drawBitmap(right, null, android.graphics.Rect(leftWidth + gap, 0, leftWidth + gap + rightWidth, height), paint)
         }
-        // To the GPU like the other photos, the heap copy freed at once
-        val hardware = pair.copy(Bitmap.Config.HARDWARE, false)
-        if (hardware != null) pair.recycle()
-        return hardware ?: pair
+        picture.endRecording()
+        val pair = try {
+            Bitmap.createBitmap(picture, leftWidth + gap + rightWidth, height, Bitmap.Config.HARDWARE)
+        } catch (e: Exception) {
+            Log.w(TAG, "Pair not drawn", e)
+            null
+        }
+        left.recycle()
+        right.recycle()
+        return pair
     }
 
     // Width and height, without decoding a pixel
@@ -511,15 +520,14 @@ class PhotoWall(
         return if (bounds.outWidth > 0 && bounds.outHeight > 0) bounds.outWidth to bounds.outHeight else null
     }
 
-    // On the heap so it can be drawn into the pair, at the smallest power-of-two size still at least
-    // [height] tall (RGB_565: half the memory, a photo has no transparency)
-    private fun decodeSoftware(bytes: ByteArray, height: Int): Bitmap? {
+    // Straight into graphics memory, at the smallest power-of-two size still at least [height] tall
+    private fun decodeHardware(bytes: ByteArray, height: Int): Bitmap? {
         val (_, fullHeight) = size(bytes) ?: return null
         var inSample = 1
         while (fullHeight / (inSample * 2) >= height) inSample *= 2
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply {
             inSampleSize = inSample
-            inPreferredConfig = Bitmap.Config.RGB_565
+            inPreferredConfig = Bitmap.Config.HARDWARE
         })
     }
 
