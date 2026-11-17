@@ -16,6 +16,7 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.graphics.Color
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -43,7 +44,7 @@ class Frame(
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
     private val wall: PhotoWall
-    private val weather = WeatherLine(root.findViewById(R.id.weather), prefs, worker)
+    private val weather = WeatherLine(root.findViewById(R.id.weather), prefs, worker, compact = true)
     private val clockBox: View = root.findViewById(R.id.clock_box)
     private val captionCard: View = root.findViewById(R.id.caption_box)
     private val sensors: LinearLayout = root.findViewById(R.id.sensors)
@@ -70,7 +71,10 @@ class Frame(
     init {
         val slides = root.findViewById<FrameLayout>(R.id.slides)
         wall = PhotoWall(context, listOf(slides.getChildAt(0) as FrameLayout, slides.getChildAt(1) as FrameLayout),
-            captionCard, root.findViewById(R.id.caption), root.findViewById(R.id.caption_date), prefs, frame = true) {}
+            captionCard, root.findViewById(R.id.caption), root.findViewById(R.id.caption_date), prefs, frame = true) { blur ->
+            // The photo's liveliest colour, lightened: the frame's text takes a hint of it
+            setAmbient(Accent.fromPhoto(blur))
+        }
         if (touch) buildGestures()
         root.addOnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
             val size = minOf(right - left, bottom - top) / 100f
@@ -176,22 +180,44 @@ class Frame(
 
     private var shownNotes: List<Overlay.Note> = emptyList()
     private var shownValues: List<Overlay.Value> = emptyList()
+    private var shownTexts: List<String> = emptyList()
 
     private fun showOverlay() {
         val now = System.currentTimeMillis()
         val values = Overlay.values(now).toList()
         if (values != shownValues) {
+            val before = shownTexts
             shownValues = values
+            shownTexts = values.map { "${it.icon}|${it.value}|${it.unit}" }
             sensors.removeAllViews()
-            values.forEachIndexed { i, value -> sensors.addView(valueView(value), LinearLayout.LayoutParams(-2, -2).apply { if (i > 0) marginStart = dp(18) }) }
+            values.forEachIndexed { i, value ->
+                val view = valueView(value).also { tint(it, ambient) }
+                sensors.addView(view, LinearLayout.LayoutParams(-2, -2).apply { if (i > 0) marginStart = dp(18) })
+                // Only a value that changed fades in: the others stay put
+                if (before.getOrNull(i) != shownTexts[i]) {
+                    view.alpha = 0f
+                    view.animate().alpha(1f).setDuration(ENTRY_MS).start()
+                }
+            }
             sensors.visibility = if (values.isEmpty()) View.GONE else View.VISIBLE
         }
 
         val current = Overlay.notes(now).toList()
         if (current != shownNotes) {
+            val before = shownNotes
             shownNotes = current
             notes.removeAllViews()
-            current.forEach { notes.addView(noteCard(it)) }
+            current.forEach { note ->
+                val card = noteCard(note).also { tint(it, ambient) }
+                notes.addView(card)
+                // A new notification slides in from the edge
+                if (before.none { it === note }) {
+                    card.alpha = 0f
+                    card.translationX = dp(48).toFloat()
+                    card.animate().alpha(1f).translationX(0f).setDuration(ENTRY_MS)
+                        .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+                }
+            }
         }
         main.removeCallbacks(endOfNote)
         Overlay.nextEnd().takeIf { it > 0 }?.let { main.postDelayed(endOfNote, (it - now).coerceAtLeast(0) + 500) }
@@ -203,36 +229,12 @@ class Frame(
      */
     private fun fit() {
         val margin = px(3f)
-        (captionCard.layoutParams as FrameLayout.LayoutParams).setMargins(margin, 0, margin, margin)
-        captionCard.requestLayout()
-        glass(captionCard, 3f)
-
-        root.findViewById<View>(R.id.caption_content).setPadding(px(2.4f), px(1.4f), px(2.4f), px(1.4f))
-        size(R.id.caption_date, 2f)
-        size(R.id.caption, 2.1f).apply {
-            maxWidth = (root.width * 0.4f).toInt()
-            ((parent as View).layoutParams as LinearLayout.LayoutParams).topMargin = px(0.3f)
-        }
-        listOf(R.id.caption_date_icon, R.id.caption_place_icon).forEach { id ->
-            root.findViewById<View>(id).layoutParams = LinearLayout.LayoutParams(px(2.2f), px(2.2f)).apply { marginEnd = px(0.8f) }
-        }
-
         notes.setPadding(margin, margin, margin, 0)
         // Built again at the new size
         shownNotes = emptyList()
         shownValues = emptyList()
         showOverlay()
     }
-
-    private fun glass(card: View, radius: Float) {
-        ((card as FrameLayout).getChildAt(0) as GlassView).apply {
-            cornerRadius = px(radius).toFloat()
-            tint = GLASS_TINT
-        }
-    }
-
-    private fun size(id: Int, vminSize: Float): TextView =
-        root.findViewById<TextView>(id).apply { setTextSize(TypedValue.COMPLEX_UNIT_PX, vmin * vminSize) }
 
     private fun px(vminSize: Float) = (vmin * vminSize).toInt()
 
@@ -289,6 +291,46 @@ class Frame(
             context.startActivity(Intent(context, HomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (e: Exception) {
             Log.w(TAG, "Cannot open the home screen", e)
+        }
+    }
+
+    // --- Ambient colour: the text takes a hint of the photo's colour ---
+
+    private var ambient = Color.WHITE
+    private var ambientFade: ValueAnimator? = null
+
+    private fun setAmbient(photoColor: Int) {
+        val target = blend(Color.WHITE, photoColor, AMBIENT_SHARE)
+        ambientFade?.cancel()
+        ambientFade = ValueAnimator.ofObject(android.animation.ArgbEvaluator(), ambient, target).apply {
+            duration = AMBIENT_FADE_MS
+            addUpdateListener { applyAmbient(it.animatedValue as Int) }
+            start()
+        }
+    }
+
+    // The time stays nearly white (half the hint), the smaller lines take it all
+    private fun applyAmbient(color: Int) {
+        ambient = color
+        val soft = blend(Color.WHITE, color, 0.5f)
+        root.findViewById<TextView>(R.id.frame_time).setTextColor(soft)
+        listOf(R.id.frame_date, R.id.weather, R.id.caption, R.id.caption_date).forEach { root.findViewById<TextView>(it).setTextColor(color) }
+        root.findViewById<TextView>(R.id.weather).compoundDrawablesRelative[0]?.setTint(color)
+        root.findViewById<ImageView>(R.id.caption_place_icon).setColorFilter(color)
+        for (i in 0 until sensors.childCount) tint(sensors.getChildAt(i), color)
+        for (i in 0 until notes.childCount) tint(notes.getChildAt(i), color)
+    }
+
+    private fun blend(from: Int, to: Int, share: Float): Int = Color.rgb(
+        (Color.red(from) + (Color.red(to) - Color.red(from)) * share).toInt(),
+        (Color.green(from) + (Color.green(to) - Color.green(from)) * share).toInt(),
+        (Color.blue(from) + (Color.blue(to) - Color.blue(from)) * share).toInt(),
+    )
+
+    private fun tint(view: View, color: Int) {
+        when (view) {
+            is TextView -> if (!view.text.any { Character.isSurrogate(it) }) view.setTextColor(color)
+            is android.view.ViewGroup -> for (i in 0 until view.childCount) tint(view.getChildAt(i), color)
         }
     }
 
@@ -421,6 +463,11 @@ class Frame(
         private const val TICK_MS = 30_000L
         private const val PAUSE_MARK_MS = 900L
         private const val BUSY_MS = 2_000L
+        // How much of the photo's colour the text takes, and how fast it follows a new photo
+        private const val AMBIENT_SHARE = 0.32f
+        private const val AMBIENT_FADE_MS = 1_200L
+        // Entries: a notification slides in, a value that changed fades in
+        private const val ENTRY_MS = 380L
         private const val BRIGHTNESS_FADE_MS = 1_000L
         // 0 % from Home Assistant: very dim, but the photo still there (0 can be the backlight off)
         private const val MIN_BRIGHTNESS = 0.01f

@@ -8,7 +8,8 @@ import android.widget.TextView
 import java.util.concurrent.Executor
 
 /** The weather line under the clock, on the home screen and on the photo frame. */
-class WeatherLine(private val view: TextView, private val prefs: Prefs, private val worker: Executor) {
+/** [compact]: the photo frame's, its icon and temperatures only ("Demain 9° / 12°"). */
+class WeatherLine(private val view: TextView, private val prefs: Prefs, private val worker: Executor, private val compact: Boolean = false) {
     private val weather = Weather(view.context)
     private val main = Handler(Looper.getMainLooper())
     private var loading = false
@@ -35,7 +36,7 @@ class WeatherLine(private val view: TextView, private val prefs: Prefs, private 
 
     private fun show() {
         val line = weather.line() ?: return
-        view.text = line.text
+        view.text = if (compact) line.text.substringBefore("  ·  ") else line.text
         if (line.icon != icon) {
             icon = line.icon
             val size = Tiles.dp(view.context, 18)

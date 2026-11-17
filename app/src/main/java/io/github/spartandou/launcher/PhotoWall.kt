@@ -74,6 +74,7 @@ class PhotoWall(
     private var media = false
     // The slow zoom of each slide, while it is shown
     private val drifts = HashMap<FrameLayout, Animator>()
+    private var zoomIn = false
     // Pictures replaced on screen, freed when the fade that covers them ends
     private val retired = mutableListOf<Bitmap>()
 
@@ -352,7 +353,8 @@ class PhotoWall(
         slide.bringToFront()
         drift(slide)
         slide.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-        slide.animate().alpha(1f).setDuration(FADE_MS).withEndAction {
+        slide.animate().alpha(1f).setDuration(if (frame) FRAME_FADE_MS else FADE_MS)
+            .setInterpolator(if (frame) AccelerateDecelerateInterpolator() else null).withEndAction {
             slide.setLayerType(View.LAYER_TYPE_NONE, null)
             // The previous photo is freed as soon as it is fully covered. Explicitly: the Java heap
             // stays tiny, so a GC (which would free it) can take many photos to come
@@ -420,14 +422,19 @@ class PhotoWall(
         slide.scaleX = 1f
         slide.scaleY = 1f
         if (!prefs.drift && !frame) return
-        slide.pivotX = slide.width * Random.nextFloat()
-        slide.pivotY = slide.height * Random.nextFloat()
+        // The frame zooms around a point near the middle (a corner could push the subject out)
+        val spread = if (frame) 0.4f else 1f
+        slide.pivotX = slide.width * (0.5f + (Random.nextFloat() - 0.5f) * spread)
+        slide.pivotY = slide.height * (0.5f + (Random.nextFloat() - 0.5f) * spread)
         drifts[slide] = if (frame) {
-            // The frame zooms in steadily for as long as the photo is shown, as ImmichFrame does
+            // The frame zooms steadily for as long as the photo is shown, in one photo and out the
+            // next, as a film's slow camera moves
+            zoomIn = !zoomIn
+            val (from, to) = if (zoomIn) 1f to FRAME_ZOOM else FRAME_ZOOM to 1f
             ObjectAnimator.ofPropertyValuesHolder(slide,
-                PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, FRAME_ZOOM),
-                PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, FRAME_ZOOM)).apply {
-                duration = prefs.intervalSeconds * 1000L + FADE_MS
+                PropertyValuesHolder.ofFloat(View.SCALE_X, from, to),
+                PropertyValuesHolder.ofFloat(View.SCALE_Y, from, to)).apply {
+                duration = prefs.intervalSeconds * 1000L + FRAME_FADE_MS
                 interpolator = android.view.animation.LinearInterpolator()
                 start()
             }
@@ -548,6 +555,8 @@ class PhotoWall(
         private const val LIST_TTL_MS = 6 * 60 * 60 * 1000L
         private const val RETRY_MS = 10_000L
         private const val FADE_MS = 1_200L
+        // The frame's cross-fade, slower and eased: a dissolve rather than a switch
+        private const val FRAME_FADE_MS = 1_800L
         // Keeps the list small in memory (~100 bytes a photo)
         private const val MAX_PER_ALBUM = 3_000
         private const val MAX_PHOTOS = 5_000
